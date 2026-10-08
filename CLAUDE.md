@@ -47,9 +47,27 @@ El usuario habla español; responde en español, conciso y directo.
   La ventana salía en el secundario y más grande que la pantalla. Ahora `main.cpp` fija monitor y
   geometría antes de mostrarla (QML ya no pone `visibility`); monitor elegible con `video/screen`
   en `arcade.ini` (0 = principal). Verificado en ambos monitores, pantalla completa y ventana.
-- **No probado aún** con FinalBurn Neo real + ROM real (verificar: arranque NeoGeo con `neogeo.zip`,
-  juegos verticales rotados como `1944`, audio sin cortes, mandos PS/Xbox reales).
+- **Previews (2026-10-08):** capturas/marquesinas aceptan también `.bmp` y `.jpeg`. El usuario tiene 185
+  capturas en `dist/media/snaps/` (venían nombradas con la suma hex de los primeros 1024 bytes del `p1`
+  de cada ROM, formato NeoRAGEx; se renombraron a `<rom>.bmp`, originales en `dist/media/snaps_originales/`).
+- **Prueba con FBNeo real (2026-10-08):** el núcleo carga, dibuja y la ventana/aspecto/scanlines van bien,
+  y **Metal Slug 2 arranca** (pantalla de título vista, CPU ~12 %). Los ROMs del usuario son un set antiguo
+  (NeoRAGEx 5.x, archivos `*.rom`): con el `neogeo.zip` nuevo **83 de 196 arrancan** y 113 no (CRC
+  distinto, o nombre que FBNeo no conoce como `kof2002-5a`, `svcchaos`).
+- **Detección de ROM malo:** `retro_load_game` devuelve true aunque el ROM no sirva (FBNeo pinta su
+  pantalla gris de error). `LibretroCore` captura el log durante la carga: líneas "is required" =
+  faltan archivos; y con FBNeo exige ver "Driver successfully started" (`loadLooksBad()`). Si falla,
+  `AppController::launch` descarga el juego, muestra el error en español y marca el ROM.
+- **Marcas ✔/✘ en la lista:** rol `status` del modelo, guardado en `roms/estado.txt` (`rom|ok` / `rom|x`),
+  se actualiza solo al lanzar cada juego. Sin entrada = sin probar (sin marca).
+- **Pausa:** clic del stick derecho (R3, ya no se envía al juego) o tecla P/Pausa. `LibretroCore::setPaused`
+  detiene cuadros y suspende el audio; en pausa `Gamepad::menuTick` sigue llamando a `poll()`.
+  Probado con la tecla P (overlay "PAUSA", reanuda bien); R3 con mando real sin probar.
+- **Herramientas de prueba:** `Arcade.exe --rom <rom>` (arranca directo) y `--check-rom <rom>` (carga sin
+  ventana; `[check] OK|FALLA` en stderr con `QT_FORCE_STDERR_LOGGING=1`; `ARCADE_LOG_ALL=1` vuelca todo
+  el log del núcleo). Un proceso por ROM: cargar muchos seguidos en el mismo proceso hace caer a FBNeo.
+- **Falta verificar** (lo tiene que hacer el usuario): audio sin cortes, mandos reales, juegos verticales.
 
 ## Ideas siguientes (si el usuario las pide)
-Favoritos / más jugados, sonidos de menú, pausa en juego con menú, remapeo de botones,
+Favoritos / más jugados, sonidos de menú, menú dentro de la pausa, remapeo de botones,
 filtros por sistema (NeoGeo / CPS / PGM), shaders CRT más elaborados, modo kiosko al arrancar Windows.

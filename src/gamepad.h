@@ -25,6 +25,8 @@ public:
 
     void setMode(Mode m);
     Mode mode() const { return m_mode; }
+    // En pausa el núcleo no corre y no llama a poll(): el mando se lee con el timer del menú
+    void setPaused(bool p) { m_paused = p; }
 
     // Llamado por el núcleo en cada cuadro
     void poll();
@@ -38,6 +40,8 @@ signals:
     void menuAction(const QString &action);
     // Combinación de salida dentro del juego (Select+Start o botón Guide/PS)
     void exitGameRequested();
+    // Botón de pausa dentro del juego (clic del stick derecho, o tecla P / Pausa)
+    void pauseRequested();
     void connectedChanged();
 
 protected:
@@ -55,6 +59,7 @@ private:
         int instanceId = -1;
         uint16_t buttons = 0;       // bitmask RETRO_DEVICE_ID_JOYPAD_*
         bool guide = false;
+        bool pause = false;         // clic del stick derecho
     };
     std::array<Pad, MaxPlayers> m_pads{};
     uint16_t m_keyboard = 0;        // bitmask del teclado (jugador 1)
@@ -69,4 +74,6 @@ private:
     qint64 m_nextRepeat = 0;
     uint16_t m_prevMenuMask = 0;
     bool m_exitLatch = false;
+    bool m_pauseLatch = false;
+    bool m_paused = false;
 };

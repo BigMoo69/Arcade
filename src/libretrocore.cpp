@@ -114,7 +114,13 @@ bool LibretroCore::loadGame(const QString &romPath)
     m_pixFmt = RETRO_PIXEL_FORMAT_0RGB1555;
     m_frame = QImage();
 
-    if (!m_api.load_game(&info)) {
+    m_loadProblems.clear();
+    m_driverStarted = false;
+    m_isFbneo = QByteArray(sys.library_name ? sys.library_name : "").contains("FinalBurn");
+    m_loading = true;
+    const bool loaded = m_api.load_game(&info);
+    m_loading = false;
+    if (!loaded) {
         m_error = QStringLiteral("No se pudo iniciar \"%1\".\n\nRevisa que el ROM sea de la versión correcta "
                                  "de FinalBurn Neo y que neogeo.zip esté en la carpeta roms si es de NeoGeo.")
                       .arg(QFileInfo(romPath).fileName());
@@ -143,9 +149,19 @@ void LibretroCore::unloadGame()
     stopAudio();
     m_api.unload_game();
     m_gameLoaded = false;
+    if (m_paused) { m_paused = false; emit pausedChanged(); }
     m_romData.clear();
     m_frame = QImage();
     emit gameStopped();
+}
+
+void LibretroCore::setPaused(bool paused)
+{
+    if (!m_gameLoaded || paused == m_paused) return;
+    m_paused = paused;
+    if (m_sink) { if (paused) m_sink->suspend(); else m_sink->resume(); }
+    if (!paused) m_nextFrameMs = double(m_clock.nsecsElapsed()) / 1e6; // no recuperes el tiempo en pausa
+    emit pausedChanged();
 }
 
 void LibretroCore::reset()
@@ -192,7 +208,7 @@ double LibretroCore::aspectRatio() const
 
 void LibretroCore::tick()
 {
-    if (!m_gameLoaded) return;
+    if (!m_gameLoaded || m_paused) return;
     const double fps = m_av.timing.fps > 1.0 ? m_av.timing.fps : 60.0;
     const double frameMs = 1000.0 / fps;
     const double now = double(m_clock.nsecsElapsed()) / 1e6;
@@ -410,11 +426,19 @@ int16_t LibretroCore::cbInputState(unsigned port, unsigned device, unsigned inde
 
 void LibretroCore::cbLog(enum retro_log_level level, const char *fmt, ...)
 {
-    if (level < RETRO_LOG_WARN) return;
+    const bool loading = s_self && s_self->m_loading;
+    if (level < RETRO_LOG_WARN && !loading) return;
     char buf[1024];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    qWarning().noquote() << "[core]" << QString::fromUtf8(buf).trimmed();
+    const QString line = QString::fromUtf8(buf).trimmed();
+    if (loading && (line.contains(QLatin1String("is required")) || line.contains(QLatin1String("is missing"))
+                    || line.contains(QLatin1String("is unknown"), Qt::CaseInsensitive)))
+        s_self->m_loadProblems << line;
+    if (loading && line.contains(QLatin1String("Driver successfully started")))
+        s_self->m_driverStarted = true;
+    if (level >= RETRO_LOG_WARN || qEnvironmentVariableIsSet("ARCADE_LOG_ALL"))
+        qWarning().noquote() << "[core]" << line;
 }

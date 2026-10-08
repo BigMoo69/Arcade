@@ -169,8 +169,17 @@ Window {
                         font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
                         color: sel ? "#300000" : win.cAccent2
                     }
+                    // ✔ funciona · ✘ no funciona · nada = aún sin probar
                     Text {
-                        anchors { verticalCenter: parent.verticalCenter; left: num.right; right: parent.right; rightMargin: 10 * u }
+                        id: mark
+                        anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 10 * u }
+                        width: 26 * u; horizontalAlignment: Text.AlignHCenter
+                        text: status > 0 ? "✔" : status < 0 ? "✘" : ""
+                        font.pixelSize: 20 * u; font.bold: true
+                        color: status > 0 ? (sel ? "#006020" : "#40e070") : (sel ? "#900000" : "#ff4050")
+                    }
+                    Text {
+                        anchors { verticalCenter: parent.verticalCenter; left: num.right; right: mark.left; rightMargin: 6 * u }
                         text: title
                         elide: Text.ElideRight
                         font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: sel
@@ -287,7 +296,7 @@ Window {
             Rectangle { anchors.top: parent.top; width: parent.width; height: 2 * u; color: win.cAccent2 }
             Text {
                 anchors.verticalCenter: parent.verticalCenter; x: 24 * u
-                text: "▲▼ ELEGIR   ◄► SALTAR 10   LB/RB LETRA   Ⓐ/✕ JUGAR   Ⓑ/○ OPCIONES"
+                text: "▲▼ ELEGIR   ◄► SALTAR 10   LB/RB LETRA   Ⓐ/✕ JUGAR   Ⓑ/○ OPCIONES   R3 PAUSA EN JUEGO"
                 font.family: arcadeFont; font.pixelSize: 16 * u; color: win.cText
             }
             Text {
@@ -324,6 +333,33 @@ Window {
             default: return
             }
             e.accepted = true
+        }
+
+        // ---------------- Pausa (clic del stick derecho / tecla P) ----------------
+        Rectangle {
+            anchors.fill: parent
+            visible: App.paused
+            color: "#b0000000"
+            Column {
+                anchors.centerIn: parent
+                spacing: 18 * u
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "PAUSA"
+                    font.family: arcadeFont; font.pixelSize: 72 * u; font.bold: true
+                    color: win.cAccent; style: Text.Outline; styleColor: "#600010"
+                    SequentialAnimation on opacity {
+                        loops: Animation.Infinite; running: App.paused
+                        NumberAnimation { to: 0.35; duration: 600 }
+                        NumberAnimation { to: 1.0; duration: 600 }
+                    }
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "STICK DERECHO (R3) / P  CONTINUAR      SELECT+START / ESC  SALIR"
+                    font.family: arcadeFont; font.pixelSize: 18 * u; color: win.cText
+                }
+            }
         }
     }
 

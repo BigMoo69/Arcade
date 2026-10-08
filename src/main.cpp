@@ -6,6 +6,7 @@
 #include <QIcon>
 #include <QQuickWindow>
 #include <QScreen>
+#include <QTimer>
 
 #include "appcontroller.h"
 #include "emulatorview.h"
@@ -54,6 +55,27 @@ int main(int argc, char *argv[])
     EmulatorView::setCore(&core);
     qmlRegisterType<EmulatorView>("ArcadeNative", 1, 0, "EmulatorView");
 
+    // "Arcade.exe --check-rom mslug" prueba cargar ese juego sin abrir la ventana y escribe el
+    // resultado en stderr: "[check] OK <rom>" o "[check] FALLA <rom>". Antes salen las líneas
+    // "[core] ... is required" con los archivos que FBNeo echa en falta (aunque diga OK).
+    const int checkArg = QCoreApplication::arguments().indexOf(QStringLiteral("--check-rom"));
+    if (checkArg >= 0) {
+        const QString only = QCoreApplication::arguments().value(checkArg + 1).toLower();
+        const int last = controller.lastIndex();
+        bool failed = false;
+        QObject::connect(&controller, &AppController::error, &app, [&failed](const QString &) { failed = true; });
+        for (int row = 0; row < games.rowCount(); ++row) {
+            if (games.get(row).value(QStringLiteral("rom")).toString().toLower() != only) continue;
+            failed = false;
+            controller.launch(row);
+            qWarning().noquote() << (failed ? "[check] FALLA" : "[check] OK")
+                                 << games.get(row).value(QStringLiteral("rom")).toString();
+            controller.stopGame();
+        }
+        controller.setLastIndex(last);
+        return 0;
+    }
+
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("App"), &controller);
     engine.rootContext()->setContextProperty(QStringLiteral("Games"), &games);
@@ -90,6 +112,24 @@ int main(int argc, char *argv[])
     };
     QObject::connect(&controller, &AppController::settingsChanged, win, applyWindowMode);
     applyWindowMode();
+
+    // "Arcade.exe --rom mslug" arranca directo en ese juego (útil para pruebas y accesos directos)
+    const QStringList args = QCoreApplication::arguments();
+    const int romArg = args.indexOf(QStringLiteral("--rom"));
+    if (romArg >= 0 && romArg + 1 < args.size()) {
+        const QString rom = args.at(romArg + 1).toLower();
+        QObject::connect(&controller, &AppController::error, &app,
+                         [](const QString &msg) { qWarning().noquote() << "[error]" << msg; });
+        QTimer::singleShot(500, &app, [&, rom] {
+            for (int row = 0; row < games.rowCount(); ++row) {
+                if (games.get(row).value(QStringLiteral("rom")).toString().toLower() == rom) {
+                    controller.launch(row);
+                    return;
+                }
+            }
+            qWarning().noquote() << "[error] ROM no encontrado:" << rom;
+        });
+    }
 
     const int ret = app.exec();
 #ifdef Q_OS_WIN

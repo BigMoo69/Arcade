@@ -6,6 +6,7 @@
 #include <QImage>
 #include <QLibrary>
 #include <QHash>
+#include <QStringList>
 #include <QMutex>
 #include <QElapsedTimer>
 #include <QTimer>
@@ -30,6 +31,15 @@ public:
     void unloadGame();
     bool isRunning() const { return m_gameLoaded; }
 
+    void setPaused(bool paused);
+    bool isPaused() const { return m_paused; }
+
+    // Lo que el núcleo echó en falta al cargar el último juego (vacío = todo bien).
+    // FBNeo devuelve "cargado" aunque falten ROMs y muestra su propia pantalla de error.
+    QStringList loadProblems() const { return m_loadProblems; }
+    // true si el último juego no arrancó de verdad (faltan archivos o FBNeo no confirmó el arranque)
+    bool loadLooksBad() const { return !m_loadProblems.isEmpty() || (m_isFbneo && !m_driverStarted); }
+
     bool saveState(const QString &path);
     bool loadState(const QString &path);
     void reset();
@@ -47,6 +57,7 @@ public:
 signals:
     void frameReady();
     void gameStopped();
+    void pausedChanged();
     void message(const QString &text);
 
 private:
@@ -93,6 +104,11 @@ private:
     QLibrary m_lib;
     bool m_coreInited = false;
     bool m_gameLoaded = false;
+    bool m_paused = false;
+    bool m_loading = false;
+    bool m_isFbneo = false;
+    bool m_driverStarted = false;
+    QStringList m_loadProblems;
     QString m_error;
 
     QByteArray m_systemDir, m_saveDir;

@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QTextStream>
 
 #ifdef Q_OS_WIN
@@ -29,6 +30,11 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
         emit gameRunningChanged();
     });
     connect(m_core, &LibretroCore::message, this, &AppController::toast);
+    connect(m_pad, &Gamepad::pauseRequested, this, &AppController::togglePause);
+    connect(m_core, &LibretroCore::pausedChanged, this, [this] {
+        m_pad->setPaused(m_core->isPaused());
+        emit pausedChanged();
+    });
 }
 
 QString AppController::cabinetName() const
@@ -37,6 +43,8 @@ QString AppController::cabinetName() const
 }
 
 bool AppController::gameRunning() const { return m_core->isRunning(); }
+bool AppController::paused() const { return m_core->isPaused(); }
+void AppController::togglePause() { m_core->setPaused(!m_core->isPaused()); }
 
 bool AppController::scanlines() const { return m_settings.value(QStringLiteral("video/scanlines"), true).toBool(); }
 void AppController::setScanlines(bool v) { m_settings.setValue(QStringLiteral("video/scanlines"), v); emit settingsChanged(); }
@@ -102,6 +110,28 @@ void AppController::launch(int row)
         emit error(m_core->lastError());
         return;
     }
+
+    // FBNeo dice "cargado" aunque el ROM no le sirva y enseña su pantalla gris de error:
+    // mejor avisar aquí, marcar el juego con X y volver al menú.
+    const QStringList problems = m_core->loadProblems();
+    if (m_core->loadLooksBad()) {
+        m_core->unloadGame();
+        m_games->setStatus(m_rom, -1);
+        QStringList files;
+        static const QRegularExpression re(QStringLiteral("with name (\\S+)"));
+        for (const QString &p : problems) {
+            const auto mt = re.match(p);
+            if (mt.hasMatch()) files << mt.captured(1);
+        }
+        emit error(files.isEmpty()
+                       ? QStringLiteral("\"%1\" no es un juego que FinalBurn Neo reconozca.\n\nEl archivo %2.zip tiene un "
+                                        "nombre o versión que el emulador no conoce.").arg(m_title, m_rom)
+                       : QStringLiteral("\"%1\" no es compatible con esta versión de FinalBurn Neo.\n\nFaltan %2 archivo(s) "
+                                        "en %3.zip:\n%4")
+                             .arg(m_title).arg(files.size()).arg(m_rom, files.mid(0, 8).join(QStringLiteral("  "))));
+        return;
+    }
+    m_games->setStatus(m_rom, 1);
     m_pad->setMode(Gamepad::GameMode);
     emit gameRunningChanged();
 }

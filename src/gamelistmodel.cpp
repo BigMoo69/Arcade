@@ -78,6 +78,42 @@ void GameListModel::loadDats()
     }
 }
 
+void GameListModel::loadStatus()
+{
+    m_status.clear();
+    QFile f(m_base + QStringLiteral("/roms/estado.txt"));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+    QTextStream in(&f);
+    in.setEncoding(QStringConverter::Utf8);
+    while (!in.atEnd()) {
+        const QStringList p = in.readLine().trimmed().split(u'|');
+        if (p.size() < 2 || p.at(0).startsWith(u'#')) continue;
+        m_status.insert(p.at(0).trimmed().toLower(), p.at(1).trimmed().toLower() == u"ok" ? 1 : -1);
+    }
+}
+
+void GameListModel::saveStatus() const
+{
+    QFile f(m_base + QStringLiteral("/roms/estado.txt"));
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) return;
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+    out << "# Estado de cada ROM: ok = funciona, x = no funciona. Se actualiza solo al lanzar un juego.\n";
+    QStringList roms = m_status.keys();
+    roms.sort();
+    for (const QString &rom : roms)
+        out << rom << '|' << (m_status.value(rom) > 0 ? "ok" : "x") << '\n';
+}
+
+void GameListModel::setStatus(const QString &rom, int status)
+{
+    if (m_status.value(rom, 0) == status) return;
+    m_status.insert(rom, status);
+    saveStatus();
+    for (int i = 0; i < m_games.size(); ++i)
+        if (m_games.at(i).rom == rom) emit dataChanged(index(i), index(i), { StatusRole });
+}
+
 void GameListModel::rescan()
 {
     beginResetModel();
@@ -87,6 +123,7 @@ void GameListModel::rescan()
     loadNamesFile(QStringLiteral(":/resources/names.txt"));     // lista integrada
     loadNamesFile(m_base + QStringLiteral("/roms/names.txt"));  // la del usuario sobreescribe
     loadDats();
+    loadStatus();
 
     const QDir roms(m_base + QStringLiteral("/roms"));
     const auto files = roms.entryInfoList({ QStringLiteral("*.zip"), QStringLiteral("*.7z") },
@@ -143,15 +180,16 @@ QVariant GameListModel::data(const QModelIndex &index, int role) const
     case YearRole:    return g.year;
     case MakerRole:   return g.maker;
     case PathRole:    return g.path;
+    case StatusRole:  return m_status.value(g.rom, 0);
     case VideoRole:
         return mediaFile(g.rom, { QStringLiteral("videos/"), QString() },
                          { QStringLiteral(".mp4"), QStringLiteral(".webm"), QStringLiteral(".avi"), QStringLiteral(".mkv") });
     case ImageRole:
         return mediaFile(g.rom, { QStringLiteral("snaps/"), QStringLiteral("titles/"), QString() },
-                         { QStringLiteral(".png"), QStringLiteral(".jpg") });
+                         { QStringLiteral(".png"), QStringLiteral(".jpg"), QStringLiteral(".jpeg"), QStringLiteral(".bmp") });
     case MarqueeRole:
         return mediaFile(g.rom, { QStringLiteral("marquees/"), QStringLiteral("wheel/") },
-                         { QStringLiteral(".png"), QStringLiteral(".jpg") });
+                         { QStringLiteral(".png"), QStringLiteral(".jpg"), QStringLiteral(".jpeg"), QStringLiteral(".bmp") });
     }
     return {};
 }
@@ -161,7 +199,7 @@ QHash<int, QByteArray> GameListModel::roleNames() const
     return {
         { RomRole, "rom" }, { TitleRole, "title" }, { YearRole, "year" },
         { MakerRole, "maker" }, { PathRole, "path" }, { VideoRole, "video" },
-        { ImageRole, "image" }, { MarqueeRole, "marquee" },
+        { ImageRole, "image" }, { MarqueeRole, "marquee" }, { StatusRole, "status" },
     };
 }
 

@@ -12,6 +12,7 @@ class AppController : public QObject
     Q_OBJECT
     Q_PROPERTY(bool gameRunning READ gameRunning NOTIFY gameRunningChanged)
     Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY gameRunningChanged)
+    Q_PROPERTY(bool paused READ paused NOTIFY pausedChanged)
     Q_PROPERTY(bool scanlines READ scanlines WRITE setScanlines NOTIFY settingsChanged)
     Q_PROPERTY(bool smooth READ smooth WRITE setSmooth NOTIFY settingsChanged)
     Q_PROPERTY(bool fullscreen READ fullscreen WRITE setFullscreen NOTIFY settingsChanged)
@@ -23,6 +24,7 @@ public:
                   GameListModel *games, QObject *parent = nullptr);
 
     bool gameRunning() const;
+    bool paused() const;
     QString currentTitle() const { return m_title; }
     QString baseDir() const { return m_base; }
     QString cabinetName() const;
@@ -36,12 +38,14 @@ public:
     Q_INVOKABLE void launch(int row);
     Q_INVOKABLE void stopGame();
     Q_INVOKABLE void resetGame();
+    Q_INVOKABLE void togglePause();
     Q_INVOKABLE void saveState(int slot = 0);
     Q_INVOKABLE void loadState(int slot = 0);
     Q_INVOKABLE void quit();
 
 signals:
     void gameRunningChanged();
+    void pausedChanged();
     void settingsChanged();
     void menuAction(const QString &action);
     void toast(const QString &text);

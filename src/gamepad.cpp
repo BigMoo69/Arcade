@@ -59,6 +59,8 @@ void Gamepad::setMode(Mode m)
     for (const Pad &p : m_pads) mask |= p.buttons;
     m_prevMenuMask = mask;
     m_exitLatch = true;
+    m_pauseLatch = true;
+    m_paused = false;
 }
 
 void Gamepad::openController(int deviceIndex)
@@ -110,7 +112,7 @@ void Gamepad::pumpEvents()
 void Gamepad::updatePadState()
 {
     for (Pad &p : m_pads) {
-        if (!p.ctrl) { p.buttons = 0; p.guide = false; continue; }
+        if (!p.ctrl) { p.buttons = 0; p.guide = false; p.pause = false; continue; }
         SDL_GameController *c = p.ctrl;
         auto btn = [c](SDL_GameControllerButton b) { return SDL_GameControllerGetButton(c, b) != 0; };
         auto ax  = [c](SDL_GameControllerAxis a)   { return int(SDL_GameControllerGetAxis(c, a)); };
@@ -126,7 +128,6 @@ void Gamepad::updatePadState()
         if (ax(SDL_CONTROLLER_AXIS_TRIGGERLEFT)  > kTriggerThreshold) m |= bit(RETRO_DEVICE_ID_JOYPAD_L2);
         if (ax(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > kTriggerThreshold) m |= bit(RETRO_DEVICE_ID_JOYPAD_R2);
         if (btn(SDL_CONTROLLER_BUTTON_LEFTSTICK))  m |= bit(RETRO_DEVICE_ID_JOYPAD_L3);
-        if (btn(SDL_CONTROLLER_BUTTON_RIGHTSTICK)) m |= bit(RETRO_DEVICE_ID_JOYPAD_R3);
         if (btn(SDL_CONTROLLER_BUTTON_BACK))  m |= bit(RETRO_DEVICE_ID_JOYPAD_SELECT); // moneda
         if (btn(SDL_CONTROLLER_BUTTON_START)) m |= bit(RETRO_DEVICE_ID_JOYPAD_START);
 
@@ -138,6 +139,7 @@ void Gamepad::updatePadState()
 
         p.buttons = m;
         p.guide = btn(SDL_CONTROLLER_BUTTON_GUIDE); // botón Xbox / PS
+        p.pause = btn(SDL_CONTROLLER_BUTTON_RIGHTSTICK); // reservado para pausa, no llega al juego
     }
 }
 
@@ -157,6 +159,15 @@ void Gamepad::poll()
         emit exitGameRequested();
     } else if (!exitCombo) {
         m_exitLatch = false;
+    }
+
+    bool pauseBtn = false;
+    for (const Pad &p : m_pads) pauseBtn |= p.pause;
+    if (pauseBtn && !m_pauseLatch && m_mode == GameMode) {
+        m_pauseLatch = true;
+        emit pauseRequested();
+    } else if (!pauseBtn) {
+        m_pauseLatch = false;
     }
 }
 
@@ -184,7 +195,10 @@ QString Gamepad::firstPadName() const
 
 void Gamepad::menuTick()
 {
-    if (m_mode != MenuMode) return;
+    if (m_mode != MenuMode) {
+        if (m_paused) poll(); // para poder quitar la pausa o salir
+        return;
+    }
     pumpEvents();
     updatePadState();
 
@@ -249,6 +263,10 @@ bool Gamepad::eventFilter(QObject *obj, QEvent *ev)
     case Qt::Key_Space:  id = RETRO_DEVICE_ID_JOYPAD_SELECT; break; // moneda
     case Qt::Key_Escape:
         if (down) emit exitGameRequested();
+        return true;
+    case Qt::Key_P:
+    case Qt::Key_Pause:
+        if (down) emit pauseRequested();
         return true;
     default:
         return QObject::eventFilter(obj, ev); // F2/F5/F7 etc. los maneja la app

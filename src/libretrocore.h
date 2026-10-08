@@ -1,0 +1,121 @@
+#pragma once
+// Host libretro mínimo: carga fbneo_libretro.dll y ejecuta un juego.
+// Todo corre en el hilo de la GUI (FBNeo es 100% software, sobra rendimiento).
+
+#include <QObject>
+#include <QImage>
+#include <QLibrary>
+#include <QHash>
+#include <QMutex>
+#include <QElapsedTimer>
+#include <QTimer>
+#include <memory>
+
+#include "libretro/libretro.h"
+
+class QAudioSink;
+class QIODevice;
+class Gamepad;
+
+class LibretroCore : public QObject
+{
+    Q_OBJECT
+public:
+    explicit LibretroCore(Gamepad *pad, QObject *parent = nullptr);
+    ~LibretroCore() override;
+
+    // Ruta de la DLL del núcleo, directorio de sistema (BIOS) y de guardado.
+    bool loadCore(const QString &corePath, const QString &systemDir, const QString &saveDir);
+    bool loadGame(const QString &romPath);
+    void unloadGame();
+    bool isRunning() const { return m_gameLoaded; }
+
+    bool saveState(const QString &path);
+    bool loadState(const QString &path);
+    void reset();
+
+    QString lastError() const { return m_error; }
+
+    // Datos de video para EmulatorView
+    QImage frame() const { return m_frame; }
+    double aspectRatio() const;          // relación final (ya considera la rotación)
+    int rotation() const { return m_rotation; } // 0..3 (múltiplos de 90° antihorario)
+
+    // Overrides de opciones del núcleo (cores/fbneo.ini)
+    void setOptionOverrides(const QHash<QByteArray, QByteArray> &o) { m_overrides = o; }
+
+signals:
+    void frameReady();
+    void gameStopped();
+    void message(const QString &text);
+
+private:
+    // Callbacks estáticos de libretro (redirigen a la instancia activa)
+    static bool    cbEnvironment(unsigned cmd, void *data);
+    static void    cbVideo(const void *data, unsigned w, unsigned h, size_t pitch);
+    static void    cbAudioSample(int16_t l, int16_t r);
+    static size_t  cbAudioBatch(const int16_t *data, size_t frames);
+    static void    cbInputPoll();
+    static int16_t cbInputState(unsigned port, unsigned device, unsigned index, unsigned id);
+    static void    cbLog(enum retro_log_level level, const char *fmt, ...);
+
+    bool environment(unsigned cmd, void *data);
+    void tick();
+    void startAudio(double sampleRate);
+    void stopAudio();
+
+    // Funciones exportadas por el núcleo
+    struct Api {
+        void (*init)();
+        void (*deinit)();
+        unsigned (*api_version)();
+        void (*get_system_info)(retro_system_info *);
+        void (*get_system_av_info)(retro_system_av_info *);
+        void (*set_environment)(retro_environment_t);
+        void (*set_video_refresh)(retro_video_refresh_t);
+        void (*set_audio_sample)(retro_audio_sample_t);
+        void (*set_audio_sample_batch)(retro_audio_sample_batch_t);
+        void (*set_input_poll)(retro_input_poll_t);
+        void (*set_input_state)(retro_input_state_t);
+        void (*set_controller_port_device)(unsigned, unsigned);
+        void (*reset)();
+        void (*run)();
+        size_t (*serialize_size)();
+        bool (*serialize)(void *, size_t);
+        bool (*unserialize)(const void *, size_t);
+        bool (*load_game)(const retro_game_info *);
+        void (*unload_game)();
+    } m_api{};
+
+    static LibretroCore *s_self;
+
+    Gamepad *m_pad;
+    QLibrary m_lib;
+    bool m_coreInited = false;
+    bool m_gameLoaded = false;
+    QString m_error;
+
+    QByteArray m_systemDir, m_saveDir;
+    QByteArray m_romData;   // si el núcleo no pide ruta completa
+    QByteArray m_romPathUtf8;
+
+    retro_pixel_format m_pixFmt = RETRO_PIXEL_FORMAT_0RGB1555;
+    retro_system_av_info m_av{};
+    unsigned m_rotation = 0;
+    QImage m_frame;
+
+    // Opciones de núcleo: clave -> valor actual
+    QHash<QByteArray, QByteArray> m_vars, m_overrides;
+    bool m_varsDirty = false;
+    QByteArray m_getVarBuf;
+
+    // Audio
+    std::unique_ptr<QAudioSink> m_sink;
+    QIODevice *m_audioDev = nullptr;
+    QByteArray m_audioBuf;
+
+    // Ritmo de cuadros
+    QTimer m_timer;
+    QElapsedTimer m_clock;
+    double m_nextFrameMs = 0;
+};

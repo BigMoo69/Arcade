@@ -1,0 +1,16 @@
+# Salidas de compilación
+build/
+dist/
+
+# Dependencias descargadas por build_windows.bat
+third_party/
+SDL2-*/
+fbneo_libretro.dll
+*.zip
+*.7z
+
+# Configuración local del IDE
+.qtcreator/
+CMakeLists.txt.user
+.vs/
+.claude/

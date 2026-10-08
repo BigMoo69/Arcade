@@ -1,0 +1,57 @@
+# Compila Arcade.exe en la nube de GitHub sin instalar nada en tu PC.
+# Sube el proyecto a un repositorio, ve a la pestaña "Actions" y descarga "Arcade-Windows".
+name: Windows build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    env:
+      SDL_VER: 2.30.9
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          modules: qtmultimedia
+          cache: true
+
+      - name: Descargar SDL2
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force third_party | Out-Null
+          Invoke-WebRequest "https://github.com/libsdl-org/SDL/releases/download/release-$env:SDL_VER/SDL2-devel-$env:SDL_VER-VC.zip" -OutFile third_party/sdl2.zip
+          Expand-Archive third_party/sdl2.zip -DestinationPath third_party -Force
+
+      - name: Compilar
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DSDL2_DIR="$PWD/third_party/SDL2-$env:SDL_VER/cmake"
+          cmake --build build --config Release
+
+      - name: Armar carpeta portable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build/Release/Arcade.exe dist/
+          Copy-Item "third_party/SDL2-$env:SDL_VER/lib/x64/SDL2.dll" dist/
+          windeployqt --release --qmldir qml --no-translations dist/Arcade.exe
+          foreach ($d in 'roms','cores','dats','fonts','system','saves','media/videos','media/snaps','media/marquees') {
+            New-Item -ItemType Directory -Force "dist/$d" | Out-Null
+            New-Item -ItemType File -Force "dist/$d/.keep" | Out-Null
+          }
+          Copy-Item extras/fbneo.ini dist/cores/
+          Copy-Item LEEME.txt dist/
+          Invoke-WebRequest https://buildbot.libretro.com/nightly/windows/x86_64/latest/fbneo_libretro.dll.zip -OutFile fbneo.zip
+          Expand-Archive fbneo.zip -DestinationPath dist/cores -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Arcade-Windows
+          path: dist

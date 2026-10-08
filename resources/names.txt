@@ -1,0 +1,212 @@
+# zip|Título|Año|Fabricante
+# Lista integrada de títulos típicos de las máquinas multijuegos.
+# Para nombres de TODOS los juegos pon el DAT XML de FinalBurn Neo en la carpeta "dats".
+# Puedes sobreescribir cualquier título creando roms/names.txt con este mismo formato.
+#
+# ---- NeoGeo ----
+kof94|The King of Fighters '94|1994|SNK
+kof95|The King of Fighters '95|1995|SNK
+kof96|The King of Fighters '96|1996|SNK
+kof97|The King of Fighters '97|1997|SNK
+kof98|The King of Fighters '98|1998|SNK
+kof99|The King of Fighters '99|1999|SNK
+kof2000|The King of Fighters 2000|2000|SNK
+kof2001|The King of Fighters 2001|2001|Eolith / SNK
+kof2002|The King of Fighters 2002|2002|Eolith / Playmore
+kof2003|The King of Fighters 2003|2003|SNK Playmore
+mslug|Metal Slug|1996|Nazca
+mslug2|Metal Slug 2|1998|SNK
+mslugx|Metal Slug X|1999|SNK
+mslug3|Metal Slug 3|2000|SNK
+mslug4|Metal Slug 4|2002|Mega / Playmore
+mslug5|Metal Slug 5|2003|SNK Playmore
+samsho|Samurai Shodown|1993|SNK
+samsho2|Samurai Shodown II|1994|SNK
+samsho3|Samurai Shodown III|1995|SNK
+samsho4|Samurai Shodown IV|1996|SNK
+samsho5|Samurai Shodown V|2003|Yuki / SNK Playmore
+samsh5sp|Samurai Shodown V Special|2004|Yuki / SNK Playmore
+fatfury1|Fatal Fury|1991|SNK
+fatfury2|Fatal Fury 2|1992|SNK
+fatfursp|Fatal Fury Special|1993|SNK
+fatfury3|Fatal Fury 3|1995|SNK
+rbff1|Real Bout Fatal Fury|1995|SNK
+rbffspec|Real Bout Fatal Fury Special|1996|SNK
+rbff2|Real Bout Fatal Fury 2|1998|SNK
+garou|Garou: Mark of the Wolves|1999|SNK
+aof|Art of Fighting|1992|SNK
+aof2|Art of Fighting 2|1994|SNK
+aof3|Art of Fighting 3|1996|SNK
+lastblad|The Last Blade|1997|SNK
+lastbld2|The Last Blade 2|1998|SNK
+kizuna|Kizuna Encounter|1996|SNK
+wh1|World Heroes|1992|Alpha Denshi
+wh2|World Heroes 2|1993|ADK
+wh2j|World Heroes 2 Jet|1994|ADK / SNK
+whp|World Heroes Perfect|1995|ADK / SNK
+svc|SNK vs. Capcom: SVC Chaos|2003|SNK Playmore
+matrim|Matrimelee|2002|Noise Factory / Atlus
+rotd|Rage of the Dragons|2002|Evoga / Playmore
+breakers|Breakers|1996|Visco
+breakrev|Breakers Revenge|1998|Visco
+ninjamas|Ninja Master's|1996|ADK / SNK
+doubledr|Double Dragon (Neo-Geo)|1995|Technos
+galaxyfg|Galaxy Fight|1995|Sunsoft
+karnovr|Karnov's Revenge|1994|Data East
+kabukikl|Far East of Eden: Kabuki Klash|1995|Hudson
+gowcaizr|Voltage Fighter Gowcaizer|1995|Technos
+ragnagrd|Ragnagard|1996|Saurus
+fightfev|Fight Fever|1994|Viccom
+aodk|Aggressors of Dark Kombat|1994|ADK / SNK
+sengoku|Sengoku|1991|SNK
+sengoku2|Sengoku 2|1993|SNK
+sengoku3|Sengoku 3|2001|Noise Factory / SNK
+blazstar|Blazing Star|1998|Yumekobo
+pulstar|Pulstar|1995|Aicom
+shocktro|Shock Troopers|1997|Saurus
+shocktr2|Shock Troopers: 2nd Squad|1998|Saurus
+nam1975|NAM-1975|1990|SNK
+twinspri|Twinkle Star Sprites|1996|ADK / SNK
+sonicwi2|Aero Fighters 2|1994|Video System
+sonicwi3|Aero Fighters 3|1995|Video System
+s1945p|Strikers 1945 Plus|1999|Psikyo
+kotm|King of the Monsters|1991|SNK
+kotm2|King of the Monsters 2|1992|SNK
+burningf|Burning Fight|1991|SNK
+mutnat|Mutation Nation|1992|SNK
+ncombat|Ninja Combat|1990|Alpha Denshi
+ncommand|Ninja Commando|1992|Alpha Denshi
+superspy|The Super Spy|1990|SNK
+viewpoin|Viewpoint|1992|Sammy / Aicom
+cyberlip|Cyber-Lip|1990|SNK
+lresort|Last Resort|1992|SNK
+alpham2|Alpha Mission II|1991|SNK
+androdun|Andro Dunos|1992|Visco
+roboarmy|Robo Army|1991|SNK
+zedblade|Zed Blade|1994|NMK
+zupapa|Zupapa!|2001|SNK
+preisle2|Prehistoric Isle 2|1999|Yumekobo
+ganryu|Ganryu|1999|Visco
+magdrop2|Magical Drop II|1996|Data East
+magdrop3|Magical Drop III|1997|Data East
+puzzledp|Puzzle De Pon!|1995|Taito / Visco
+pbobblen|Puzzle Bobble|1994|Taito
+popbounc|Pop 'n Bounce|1997|Video System
+panicbom|Panic Bomber|1995|Eighting / Hudson
+neobombe|Neo Bomberman|1997|Hudson
+gururin|Gururin|1994|Face
+joyjoy|Puzzled|1990|SNK
+bstars|Baseball Stars Professional|1990|SNK
+bstars2|Baseball Stars 2|1992|SNK
+ssideki|Super Sidekicks|1992|SNK
+ssideki2|Super Sidekicks 2|1994|SNK
+ssideki3|Super Sidekicks 3|1995|SNK
+ssideki4|The Ultimate 11|1996|SNK
+neocup98|Neo-Geo Cup '98|1998|SNK
+goalx3|Goal! Goal! Goal!|1995|Visco
+strhoop|Street Hoop|1994|Data East
+3countb|3 Count Bout|1993|SNK
+wjammers|Windjammers|1994|Data East
+turfmast|Neo Turf Masters|1996|Nazca
+neodrift|Neo Drift Out|1996|Visco
+trally|Thrash Rally|1991|Alpha Denshi
+overtop|Over Top|1996|ADK
+lbowling|League Bowling|1990|SNK
+tophuntr|Top Hunter|1994|SNK
+spinmast|Spin Master|1993|Data East
+maglord|Magician Lord|1990|Alpha Denshi
+eightman|Eight Man|1991|SNK / Pallas
+crsword|Crossed Swords|1991|Alpha Denshi
+bjourney|Blue's Journey|1990|Alpha Denshi
+legendos|Legend of Success Joe|1991|SNK / Wave
+wakuwak7|Waku Waku 7|1996|Sunsoft
+savagere|Savage Reign|1995|SNK
+stakwin|Stakes Winner|1995|Saurus
+stakwin2|Stakes Winner 2|1996|Saurus
+tws96|Tecmo World Soccer '96|1996|Tecmo
+tpgolf|Top Player's Golf|1990|SNK
+socbrawl|Soccer Brawl|1991|SNK
+ctomaday|Captain Tomaday|1999|Visco
+flipshot|Battle Flip Shot|1998|Visco
+nitd|Nightmare in the Dark|2000|Eleven / Gavaking
+sbp|Super Bubble Pop|2004|Vektorlogic
+#
+# ---- Capcom CPS1 / CPS2 / CPS3 ----
+sf2|Street Fighter II: The World Warrior|1991|Capcom
+sf2ce|Street Fighter II': Champion Edition|1992|Capcom
+sf2hf|Street Fighter II': Hyper Fighting|1992|Capcom
+ssf2|Super Street Fighter II|1993|Capcom
+ssf2t|Super Street Fighter II Turbo|1994|Capcom
+sfa|Street Fighter Alpha|1995|Capcom
+sfa2|Street Fighter Alpha 2|1996|Capcom
+sfa3|Street Fighter Alpha 3|1998|Capcom
+sfiii3|Street Fighter III 3rd Strike|1999|Capcom
+jojoba|JoJo's Bizarre Adventure|1999|Capcom
+ffight|Final Fight|1989|Capcom
+captcomm|Captain Commando|1991|Capcom
+knights|Knights of the Round|1991|Capcom
+kod|The King of Dragons|1991|Capcom
+dino|Cadillacs and Dinosaurs|1993|Capcom
+punisher|The Punisher|1993|Capcom
+slammast|Saturday Night Slam Masters|1993|Capcom
+mbombrd|Muscle Bomber Duo|1993|Capcom
+wof|Warriors of Fate|1992|Capcom
+mercs|Mercs|1990|Capcom
+strider|Strider|1989|Capcom
+ghouls|Ghouls'n Ghosts|1988|Capcom
+forgottn|Forgotten Worlds|1988|Capcom
+willow|Willow|1989|Capcom
+nemo|Nemo|1990|Capcom
+cawing|Carrier Air Wing|1990|Capcom
+varth|Varth: Operation Thunderstorm|1992|Capcom
+3wonders|Three Wonders|1991|Capcom
+unsquad|U.N. Squadron|1989|Capcom
+1941|1941: Counter Attack|1990|Capcom
+19xx|19XX: The War Against Destiny|1995|Capcom
+1944|1944: The Loop Master|2000|8ing / Raizing / Capcom
+xmcota|X-Men: Children of the Atom|1994|Capcom
+msh|Marvel Super Heroes|1995|Capcom
+xmvsf|X-Men vs. Street Fighter|1996|Capcom
+mshvsf|Marvel Super Heroes vs. Street Fighter|1997|Capcom
+mvsc|Marvel vs. Capcom|1998|Capcom
+vsav|Vampire Savior|1997|Capcom
+vhunt2|Vampire Hunter 2|1997|Capcom
+cybots|Cyberbots|1995|Capcom
+sgemf|Super Gem Fighter Mini Mix|1997|Capcom
+spf2t|Super Puzzle Fighter II Turbo|1996|Capcom
+avsp|Alien vs. Predator|1994|Capcom
+ddtod|Dungeons & Dragons: Tower of Doom|1993|Capcom
+ddsom|Dungeons & Dragons: Shadow over Mystara|1996|Capcom
+armwar|Armored Warriors|1994|Capcom
+batcir|Battle Circuit|1997|Capcom
+ecofghtr|Eco Fighters|1993|Capcom
+progear|Progear|2001|Cave / Capcom
+dimahoo|Dimahoo|2000|8ing / Raizing / Capcom
+gigawing|Giga Wing|1999|Takumi / Capcom
+mmatrix|Mars Matrix|2000|Takumi / Capcom
+ringdest|Ring of Destruction: Slammasters II|1994|Capcom
+mpang|Mighty! Pang|2000|Mitchell / Capcom
+#
+# ---- IGS PGM (requiere pgm.zip) ----
+kov|Knights of Valour|1999|IGS
+kovplus|Knights of Valour Plus|1999|IGS
+kovsh|Knights of Valour Super Heroes|1999|IGS
+kov2|Knights of Valour 2|2000|IGS
+orlegend|Oriental Legend|1997|IGS
+martmast|Martial Masters|2001|IGS
+killbld|The Killing Blade|1998|IGS
+#
+# ---- Konami / otros clásicos ----
+tmnt|Teenage Mutant Ninja Turtles|1989|Konami
+tmnt2|TMNT: Turtles in Time|1991|Konami
+ssriders|Sunset Riders|1991|Konami
+simpsons|The Simpsons|1991|Konami
+xmen|X-Men|1992|Konami
+pang|Pang|1989|Mitchell
+bublbobl|Bubble Bobble|1986|Taito
+1943|1943: The Battle of Midway|1987|Capcom
+commando|Commando|1985|Capcom
+galaga|Galaga|1981|Namco
+pacman|Pac-Man|1980|Namco
+mspacman|Ms. Pac-Man|1981|Midway
+dkong|Donkey Kong|1981|Nintendo

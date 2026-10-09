@@ -95,6 +95,7 @@ private:
     static void    cbInputPoll();
     static int16_t cbInputState(unsigned port, unsigned device, unsigned index, unsigned id);
     static void    cbLog(enum retro_log_level level, const char *fmt, ...);
+    static bool    cbRumble(unsigned port, enum retro_rumble_effect effect, uint16_t strength);
 
     bool environment(unsigned cmd, void *data);
     void tick();

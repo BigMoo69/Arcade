@@ -65,10 +65,11 @@ Window {
 
     // ---------------- Entrada unificada (teclado + mandos) ----------------
     function act(a) {
-        if (App.confirmingExit) { exitDlg.handle(a); return }
-        if (App.paused) { pauseMenu.handle(a); return }
+        if (App.confirmingExit) { sfx(a); exitDlg.handle(a); return }
+        if (App.paused) { sfx(a); pauseMenu.handle(a); return }
         if (App.gameRunning) return
         if (wake()) return
+        if (!Pad.capturing) sfx(a)
         if (errorText !== "") { if (a === "accept" || a === "back") errorText = ""; return }
         if (Pad.capturing) return
         if (searchOpen) { search.handle(a); return }
@@ -82,7 +83,7 @@ Window {
         case "pageUp":   select(Games.jumpLetter(current, -1)); break
         case "pageDown": select(Games.jumpLetter(current, 1)); break
         case "accept":   if (Games.count > 0) { clickSfx(); App.launch(current) } break
-        case "back":     optionsOpen = true; options.index = 0; break
+        case "back":     optionsOpen = true; break
         case "search":     search.index = 0; searchOpen = true; break
         case "systemPrev": changeSystem(-1); break
         case "systemNext": changeSystem(1); break
@@ -121,7 +122,29 @@ Window {
         select(n)
     }
     function select(i) { current = i; list.positionViewAtIndex(i, ListView.Contain) }
-    function clickSfx() {}  // pon aquí un SoundEffect si quieres sonidos de menú
+    function clickSfx() {}
+
+    // ---------------- Sonidos y música del menú ----------------
+    // Los .wav están en la carpeta sounds/ (se crean unos sencillos si faltan; puedes cambiarlos).
+    // La música es opcional: sounds/musica.mp3 (u .ogg/.wav) suena en el menú y calla al jugar.
+    SoundEffect { id: sfxMove; source: App.soundUrl("mover"); volume: App.volume / 100 * 0.5 }
+    SoundEffect { id: sfxAccept; source: App.soundUrl("aceptar"); volume: App.volume / 100 * 0.5 }
+    SoundEffect { id: sfxBack; source: App.soundUrl("volver"); volume: App.volume / 100 * 0.5 }
+    function sfx(a) {
+        if (!App.menuSounds) return
+        if (a === "accept") sfxAccept.play()
+        else if (a === "back" || a === "pause") sfxBack.play()
+        else if (a !== "") sfxMove.play()
+    }
+    MediaPlayer {
+        id: music
+        source: App.musicUrl
+        loops: MediaPlayer.Infinite
+        audioOutput: AudioOutput { volume: App.volume / 100 * 0.35 }
+        readonly property bool wanted: App.menuMusic && App.musicUrl !== "" && !App.gameRunning
+        onWantedChanged: wanted ? play() : pause()
+        Component.onCompleted: if (wanted) play()
+    }
 
     Connections {
         target: Games
@@ -1069,33 +1092,54 @@ Window {
         color: "#90000000" // deja ver el menú detrás para apreciar el tema y el fondo al cambiarlos
         visible: win.optionsOpen && !win.remapOpen && !App.gameRunning
         property int index: 0
+        property string section: "" // "" = menú principal de opciones
+        onVisibleChanged: if (visible && !win.remapOpen) { section = ""; index = 0 }
+        function open(sec) { section = sec; index = 0 }
+        function yn(v) { return v ? "SÍ" : "NO" }
         // "side" = lo que hacen ◄ ► en esa fila (anterior / siguiente)
-        readonly property var items: [
-            { label: "CONTINUAR", act: function () { win.optionsOpen = false } },
-            { label: "◄ TEMA: " + Theme.name + " ►", act: function () { Theme.nextTheme(1) }, side: function (d) { Theme.nextTheme(d) } },
-            { label: "◄ FONDO: " + Theme.backgroundName.substring(0, 24) + " ►", act: function () { Theme.nextBackground(1) }, side: function (d) { Theme.nextBackground(d) } },
-            { label: "SCANLINES: " + (App.scanlines ? "SÍ" : "NO"), act: function () { App.scanlines = !App.scanlines } },
-            { label: "◄ EFECTO CRT: " + win.crtNames[App.crt] + " ►", act: function () { App.crt = App.crt + 1 }, side: function (d) { App.crt = App.crt + d } },
-            { label: "MARCO DEL JUEGO: " + (App.bezel ? "SÍ" : "NO"), act: function () { App.bezel = !App.bezel } },
-            { label: "FILTRO SUAVE: " + (App.smooth ? "SÍ" : "NO"), act: function () { App.smooth = !App.smooth } },
-            { label: "PANTALLA COMPLETA: " + (App.fullscreen ? "SÍ" : "NO"), act: function () { App.fullscreen = !App.fullscreen } },
-            { label: "◄ IMAGEN DEL JUEGO: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 }, side: function (d) { App.aspectMode = App.aspectMode + d } },
-            { label: "◄ VOLUMEN: " + App.volume + " % ►", act: function () { App.volume = App.volume >= 100 ? 0 : App.volume + 10 }, side: function (d) { App.volume = App.volume + d * 10 } },
-            { label: "CONTINUAR DONDE LO DEJÉ: " + (App.autoResume ? "SÍ" : "NO"), act: function () { App.autoResume = !App.autoResume } },
-            { label: "REBOBINAR (RETROCESO): " + (App.rewind ? "SÍ" : "NO"), act: function () { App.rewind = !App.rewind } },
-            { label: "MODO ATRACCIÓN: " + (App.attract ? "SÍ" : "NO"), act: function () { App.attract = !App.attract } },
-            { label: "OCULTAR JUEGOS CON ✘: " + (App.hideBroken ? "SÍ" : "NO"), act: function () { win.refilter(function () { App.hideBroken = !App.hideBroken }) } },
-            { label: "OCULTAR VERSIONES REPETIDAS: " + (App.hideClones ? "SÍ" : "NO"), act: function () { win.refilter(function () { App.hideClones = !App.hideClones }) } },
-            { label: "CONFIGURAR CONTROLES", act: function () { remap.index = 0; remap.dev = 0; win.remapOpen = true } },
-            { label: "RECARGAR JUEGOS, TEMAS Y FONDOS", act: function () { Games.rescan(); Theme.reload(); win.current = 0; win.optionsOpen = false } },
-            { label: "SALIR", act: function () { App.quit() } }
-        ]
+        readonly property var sections: ({
+            "": { title: "OPCIONES", items: [
+                { label: "CONTINUAR", act: function () { win.optionsOpen = false } },
+                { label: "IMAGEN  ►", act: function () { options.open("imagen") } },
+                { label: "SONIDO  ►", act: function () { options.open("sonido") } },
+                { label: "JUEGO  ►", act: function () { options.open("juego") } },
+                { label: "LISTA DE JUEGOS  ►", act: function () { options.open("lista") } },
+                { label: "APARIENCIA DEL MENÚ  ►", act: function () { options.open("menu") } },
+                { label: "CONFIGURAR CONTROLES", act: function () { remap.index = 0; remap.dev = 0; win.remapOpen = true } },
+                { label: "SALIR DEL ARCADE", act: function () { App.quit() } } ] },
+            "imagen": { title: "IMAGEN", items: [
+                { label: "◄ EFECTO CRT: " + win.crtNames[App.crt] + " ►", act: function () { App.crt = App.crt + 1 }, side: function (d) { App.crt = App.crt + d } },
+                { label: "SCANLINES SIMPLES: " + yn(App.scanlines), act: function () { App.scanlines = !App.scanlines } },
+                { label: "FILTRO SUAVE: " + yn(App.smooth), act: function () { App.smooth = !App.smooth } },
+                { label: "◄ TAMAÑO: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 }, side: function (d) { App.aspectMode = App.aspectMode + d } },
+                { label: "MARCO DEL JUEGO: " + yn(App.bezel), act: function () { App.bezel = !App.bezel } },
+                { label: "PANTALLA COMPLETA: " + yn(App.fullscreen), act: function () { App.fullscreen = !App.fullscreen } } ] },
+            "sonido": { title: "SONIDO", items: [
+                { label: "◄ VOLUMEN: " + App.volume + " % ►", act: function () { App.volume = App.volume >= 100 ? 0 : App.volume + 10 }, side: function (d) { App.volume = App.volume + d * 10 } },
+                { label: "SONIDOS DEL MENÚ: " + yn(App.menuSounds), act: function () { App.menuSounds = !App.menuSounds } },
+                { label: "MÚSICA DEL MENÚ: " + (App.musicUrl === "" ? "SIN ARCHIVO" : yn(App.menuMusic)), act: function () {
+                      if (App.musicUrl === "") toast.show("PON TU MÚSICA EN sounds\\musica.mp3 Y REINICIA EL ARCADE")
+                      else App.menuMusic = !App.menuMusic } } ] },
+            "juego": { title: "JUEGO", items: [
+                { label: "CONTINUAR DONDE LO DEJÉ: " + yn(App.autoResume), act: function () { App.autoResume = !App.autoResume } },
+                { label: "REBOBINAR (RETROCESO): " + yn(App.rewind), act: function () { App.rewind = !App.rewind } } ] },
+            "lista": { title: "LISTA DE JUEGOS", items: [
+                { label: "OCULTAR JUEGOS CON ✘: " + yn(App.hideBroken), act: function () { win.refilter(function () { App.hideBroken = !App.hideBroken }) } },
+                { label: "OCULTAR VERSIONES REPETIDAS: " + yn(App.hideClones), act: function () { win.refilter(function () { App.hideClones = !App.hideClones }) } },
+                { label: "RECARGAR JUEGOS, TEMAS Y FONDOS", act: function () { Games.rescan(); Theme.reload(); win.current = 0; win.optionsOpen = false } } ] },
+            "menu": { title: "APARIENCIA DEL MENÚ", items: [
+                { label: "◄ TEMA: " + Theme.name + " ►", act: function () { Theme.nextTheme(1) }, side: function (d) { Theme.nextTheme(d) } },
+                { label: "◄ FONDO: " + Theme.backgroundName.substring(0, 24) + " ►", act: function () { Theme.nextBackground(1) }, side: function (d) { Theme.nextBackground(d) } },
+                { label: "MODO ATRACCIÓN: " + yn(App.attract), act: function () { App.attract = !App.attract } } ] }
+        })
+        readonly property var items: sections[section].items.concat(
+            section === "" ? [] : [{ label: "VOLVER", act: function () { options.open("") } }])
         function handle(a) {
             if (a === "up") index = (index + items.length - 1) % items.length
             else if (a === "down") index = (index + 1) % items.length
             else if (a === "accept") items[index].act()
             else if ((a === "left" || a === "right") && items[index].side) items[index].side(a === "left" ? -1 : 1)
-            else if (a === "back") win.optionsOpen = false
+            else if (a === "back") { if (section === "") win.optionsOpen = false; else open("") }
         }
         MouseArea { anchors.fill: parent; onClicked: win.optionsOpen = false; onWheel: {} } // clic fuera = cerrar
         Rectangle {
@@ -1106,24 +1150,32 @@ Window {
             Column {
                 id: col
                 anchors.centerIn: parent
-                spacing: 4 * u
+                spacing: 8 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "OPCIONES"; color: win.cAccent2
+                    text: options.sections[options.section].title; color: win.cAccent2
                     font.family: arcadeFont; font.pixelSize: 30 * u; font.bold: true
+                    bottomPadding: 4 * u
                 }
                 Repeater {
                     model: options.items.length
                     Rectangle {
-                        width: 500 * u; height: 29 * u; radius: 4 * u
+                        readonly property var item: options.items[index]
+                        width: 500 * u; height: 40 * u; radius: 4 * u
                         color: index === options.index ? win.cAccent : "transparent"
                         Text {
                             anchors.centerIn: parent
-                            text: options.items[index].label
+                            text: item ? item.label : ""
                             color: index === options.index ? win.cOnAccent : win.cText
                             font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
                         }
-                        MouseArea { anchors.fill: parent; onClicked: { options.index = index; options.items[index].act() } }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: (m) => {
+                                options.index = index
+                                if (item.side) item.side(m.x < width / 2 ? -1 : 1); else item.act()
+                            }
+                        }
                     }
                 }
             }

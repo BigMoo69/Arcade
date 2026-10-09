@@ -508,6 +508,16 @@ bool LibretroCore::environment(unsigned cmd, void *data)
         *static_cast<bool *>(data) = true;
         return true;
 
+    case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
+        if (data) static_cast<retro_rumble_interface *>(data)->set_rumble_state = &LibretroCore::cbRumble;
+        return true;
+
+    // Los estados que pedimos son siempre guardados normales (no hay run-ahead ni netplay).
+    // FBNeo lo necesita para activar las tablas de récords (hiscore.dat).
+    case RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT:
+        if (data) *static_cast<int *>(data) = RETRO_SAVESTATE_CONTEXT_NORMAL; // con data nulo solo preguntan si existe
+        return true;
+
     case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
         static_cast<retro_log_callback *>(data)->log = &LibretroCore::cbLog;
         return true;
@@ -628,6 +638,13 @@ int16_t LibretroCore::cbInputState(unsigned port, unsigned device, unsigned inde
     if (!s_self || !s_self->m_pad) return 0;
     if ((device & RETRO_DEVICE_MASK) != RETRO_DEVICE_JOYPAD) return 0;
     return s_self->m_pad->retroButton(int(port), id) ? 1 : 0;
+}
+
+bool LibretroCore::cbRumble(unsigned port, enum retro_rumble_effect effect, uint16_t strength)
+{
+    if (!s_self || !s_self->m_pad) return false;
+    s_self->m_pad->setRumble(int(port), effect == RETRO_RUMBLE_STRONG, strength);
+    return true;
 }
 
 void LibretroCore::cbLog(enum retro_log_level level, const char *fmt, ...)

@@ -74,6 +74,8 @@ public:
     void poll();
     bool retroButton(int port, unsigned retroId) const;
     // Botones de "mantener pulsado" (mando, o tecla Retroceso para rebobinar)
+    // Vibración que pide el núcleo: motor fuerte o débil del mando de ese jugador (0 = parar)
+    void setRumble(int port, bool strongMotor, quint16 strength);
     bool rewindHeld() const;
     bool fastHeld() const;
 
@@ -110,6 +112,7 @@ private:
         bool guide = false;
         bool pause = false;         // clic del stick derecho
         bool rewind = false, fast = false;
+        quint16 rumbleStrong = 0, rumbleWeak = 0;
     };
     std::array<Pad, MaxPlayers> m_pads{};
     std::array<uint16_t, 2> m_keyboard{}; // bitmask del teclado: jugador 1 y jugador 2

@@ -32,6 +32,10 @@ class AppController : public QObject
     Q_PROPERTY(int attractSeconds READ attractSeconds CONSTANT)
     Q_PROPERTY(bool rewind READ rewind WRITE setRewind NOTIFY settingsChanged)   // permite rebobinar
     Q_PROPERTY(bool rewinding READ rewinding NOTIFY rewindingChanged)
+    // Sonidos del menú (sounds/mover.wav, aceptar.wav, volver.wav) y música de fondo (sounds/musica.*)
+    Q_PROPERTY(bool menuSounds READ menuSounds WRITE setMenuSounds NOTIFY settingsChanged)
+    Q_PROPERTY(bool menuMusic READ menuMusic WRITE setMenuMusic NOTIFY settingsChanged)
+    Q_PROPERTY(QString musicUrl READ musicUrl CONSTANT) // "" si no hay archivo de música
     Q_PROPERTY(bool hideBroken READ hideBroken WRITE setHideBroken NOTIFY settingsChanged)
     Q_PROPERTY(bool hideClones READ hideClones WRITE setHideClones NOTIFY settingsChanged)
     Q_PROPERTY(bool fastForward READ fastForward WRITE setFastForward NOTIFY fastForwardChanged)
@@ -65,6 +69,10 @@ public:
     int attractSeconds() const; // ui/attractSeconds en arcade.ini (60 por defecto)
     bool rewind() const;     void setRewind(bool v);
     bool rewinding() const;
+    bool menuSounds() const; void setMenuSounds(bool v);
+    bool menuMusic() const;  void setMenuMusic(bool v);
+    QString musicUrl() const;
+    Q_INVOKABLE QString soundUrl(const QString &name) const;
     bool hideBroken() const; void setHideBroken(bool v);
     bool hideClones() const; void setHideClones(bool v);
     bool fastForward() const; void setFastForward(bool v);
@@ -107,6 +115,8 @@ private:
     bool ensureCore(QString coreFile);
     QString statePath(int slot) const;
     QString autoStatePath() const;
+    void ensureSounds() const;
+    bool m_quiet = false; // pruebas automáticas: sin sonidos de menú
 
     QString m_base;
     LibretroCore *m_core;

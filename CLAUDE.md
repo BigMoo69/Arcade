@@ -212,8 +212,19 @@ El usuario habla español; responde en español, conciso y directo.
     EMULADOR" el resto. `stepCoreOption` no guarda los trucos en el `.ini`: duran hasta cerrar el Arcade.
     1.919 de los zips del usuario tienen archivo propio. Solo FBNeo (otros núcleos usan `retro_cheat_set`,
     sin implementar).
-  - **Pendiente de la lista de RetroArch:** mapeo por juego, sonidos de menú, récords (hiscore.dat),
-    vibración, run-ahead, núcleos con OpenGL.
+  - *Opciones por secciones (2026-10-09):* `options.sections` en `Main.qml` (IMAGEN, SONIDO, JUEGO,
+    LISTA DE JUEGOS, APARIENCIA DEL MENÚ); cada opción nueva va en su sección, no en el menú principal.
+  - *Sonidos del menú:* `sounds/mover.wav`, `aceptar.wav`, `volver.wav` (`AppController::ensureSounds()`
+    los genera si faltan; el usuario puede sustituirlos) y música opcional `sounds/musica.mp3|ogg|wav`.
+    `audio/menuSounds`, `audio/menuMusic`. Con `--test-actions`/`--check-rom` no suenan (`m_quiet`).
+    **Nadie los ha oído todavía.**
+  - *Vibración:* `GET_RUMBLE_INTERFACE` → `Gamepad::setRumble` (SDL). Sin probar con mando.
+  - *Récords:* el host ya responde `GET_SAVESTATE_CONTEXT` (FBNeo lo exige para hiscore). Ojo: los
+    núcleos llaman a `environment` con `data` nulo para preguntar si algo existe; hay que comprobarlo
+    (sin eso FBNeo tumbaba el programa al cargar). `hiscore.dat` (328 KB, de `libretro/FBNeo`
+    `metadata/`; el repo `finalburnneo/FBNeo` no lo trae) está en `dist/system/fbneo/`; los récords
+    se guardan en `saves/fbneo/<rom>.hi` (probado con 1942). NeoGeo usa su propia memoria (`.fs`).
+  - **Pendiente de la lista de RetroArch:** mapeo por juego, run-ahead, núcleos con OpenGL.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`
     y `roms/favoritos.txt` (no borrarlos: el usuario usa el Arcade entre prueba y prueba), o usar una
     base aparte con `ARCADE_DIR`.

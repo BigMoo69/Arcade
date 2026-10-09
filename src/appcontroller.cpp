@@ -4,7 +4,9 @@
 #include "gamelistmodel.h"
 
 #include <QCoreApplication>
+#include <QDataStream>
 #include <QDateTime>
+#include <cmath>
 #include <QImage>
 #include <QUrl>
 #include <QDir>
@@ -22,6 +24,58 @@ static const char *kCoreFile = "fbneo_libretro.dylib";
 static const char *kCoreFile = "fbneo_libretro.so";
 #endif
 
+// Escribe un .wav corto (22 kHz, mono, 16 bits) con una serie de notas de onda cuadrada que se
+// apagan: los "blips" del menú. Solo se crean si faltan, así el usuario puede poner los suyos.
+static void writeBlip(const QString &file, std::initializer_list<std::pair<double, int>> notes)
+{
+    if (QFileInfo::exists(file)) return;
+    const int rate = 22050;
+    QByteArray pcm;
+    QDataStream s(&pcm, QIODevice::WriteOnly);
+    s.setByteOrder(QDataStream::LittleEndian);
+    for (const auto &[freq, ms] : notes) {
+        const int n = rate * ms / 1000;
+        for (int i = 0; i < n; ++i) {
+            const double phase = std::fmod(i * freq / rate, 1.0);
+            const double fade = 1.0 - double(i) / n;
+            s << qint16((phase < 0.5 ? 1 : -1) * 5000 * fade);
+        }
+    }
+    QByteArray wav;
+    QDataStream h(&wav, QIODevice::WriteOnly);
+    h.setByteOrder(QDataStream::LittleEndian);
+    h.writeRawData("RIFF", 4); h << quint32(36 + pcm.size());
+    h.writeRawData("WAVEfmt ", 8); h << quint32(16) << quint16(1) << quint16(1) << quint32(rate)
+                                      << quint32(rate * 2) << quint16(2) << quint16(16);
+    h.writeRawData("data", 4); h << quint32(pcm.size());
+    QDir().mkpath(QFileInfo(file).absolutePath());
+    QFile f(file);
+    if (f.open(QIODevice::WriteOnly)) { f.write(wav); f.write(pcm); }
+}
+
+void AppController::ensureSounds() const
+{
+    const QString dir = m_base + QStringLiteral("/sounds/");
+    writeBlip(dir + QStringLiteral("mover.wav"), { { 1320, 28 } });
+    writeBlip(dir + QStringLiteral("aceptar.wav"), { { 660, 45 }, { 990, 45 }, { 1320, 70 } });
+    writeBlip(dir + QStringLiteral("volver.wav"), { { 520, 45 }, { 390, 70 } });
+}
+
+QString AppController::soundUrl(const QString &name) const
+{
+    const QString f = m_base + QStringLiteral("/sounds/") + name + QStringLiteral(".wav");
+    return QFileInfo::exists(f) ? QUrl::fromLocalFile(f).toString() : QString();
+}
+
+QString AppController::musicUrl() const
+{
+    for (const char *ext : { ".mp3", ".ogg", ".wav", ".flac", ".m4a" }) {
+        const QString f = m_base + QStringLiteral("/sounds/musica") + QLatin1String(ext);
+        if (QFileInfo::exists(f)) return QUrl::fromLocalFile(f).toString();
+    }
+    return {};
+}
+
 AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad *pad,
                              GameListModel *games, QObject *parent)
     : QObject(parent), m_base(baseDir), m_core(core), m_pad(pad), m_games(games),
@@ -30,6 +84,9 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
     connect(m_pad, &Gamepad::menuAction, this, &AppController::menuAction);
     connect(m_pad, &Gamepad::exitGameRequested, this, &AppController::requestExit);
     m_core->setVolume(volume() / 100.0);
+    m_quiet = QCoreApplication::arguments().contains(QStringLiteral("--test-actions"))
+              || QCoreApplication::arguments().contains(QStringLiteral("--check-rom"));
+    if (!m_quiet) ensureSounds();
     m_games->setHideBroken(hideBroken());
     m_core->setRewindEnabled(rewind());
     connect(m_core, &LibretroCore::rewindingChanged, this, &AppController::rewindingChanged);
@@ -150,6 +207,10 @@ void AppController::setRewind(bool v)
     emit settingsChanged();
 }
 bool AppController::rewinding() const { return m_core->rewinding(); }
+bool AppController::menuSounds() const { return !m_quiet && m_settings.value(QStringLiteral("audio/menuSounds"), true).toBool(); }
+void AppController::setMenuSounds(bool v) { m_settings.setValue(QStringLiteral("audio/menuSounds"), v); emit settingsChanged(); }
+bool AppController::menuMusic() const { return !m_quiet && m_settings.value(QStringLiteral("audio/menuMusic"), true).toBool(); }
+void AppController::setMenuMusic(bool v) { m_settings.setValue(QStringLiteral("audio/menuMusic"), v); emit settingsChanged(); }
 bool AppController::hideBroken() const { return m_settings.value(QStringLiteral("ui/hideBroken"), false).toBool(); }
 void AppController::setHideBroken(bool v)
 {

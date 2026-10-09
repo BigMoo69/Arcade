@@ -58,6 +58,8 @@ PREVIEWS (opcional)
   Puedes descargarlos con un scraper como Skraper (skraper.net).
 
 PERSONALIZAR
+  sounds\           Sonidos del menú: mover.wav, aceptar.wav y volver.wav (cámbialos por los tuyos).
+                    Si pones musica.mp3 (u .ogg / .wav) sonará de fondo en el menú.
   arcade.ini        Nombre de la máquina en  [ui] title=MI ARCADE
   roms\names.txt    Cambiar títulos:  kof98|KOF 98 ULTIMATE|1998|SNK
   dats\             Pon el DAT de FinalBurn Neo (.dat) para nombres de

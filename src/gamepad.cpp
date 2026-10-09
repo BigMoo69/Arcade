@@ -239,6 +239,8 @@ Gamepad::~Gamepad()
 void Gamepad::setMode(Mode m)
 {
     m_mode = m;
+    if (m == MenuMode) // al salir del juego o pausar, los mandos dejan de vibrar
+        for (int i = 0; i < MaxPlayers; ++i) { setRumble(i, true, 0); setRumble(i, false, 0); }
     m_keyboard = {};
     m_keyRewind = false;
     m_heldAction.clear();
@@ -377,6 +379,17 @@ bool Gamepad::retroButton(int port, unsigned retroId) const
     uint16_t mask = m_pads[size_t(port)].buttons;
     if (port < 2) mask |= m_keyboard[size_t(port)];
     return (mask >> retroId) & 1;
+}
+
+void Gamepad::setRumble(int port, bool strongMotor, quint16 strength)
+{
+    if (port < 0 || port >= MaxPlayers) return;
+    Pad &p = m_pads[size_t(port)];
+    quint16 &motor = strongMotor ? p.rumbleStrong : p.rumbleWeak;
+    if (motor == strength) return;
+    motor = strength;
+    // SDL corta sola la vibración al pasar el tiempo indicado; el núcleo la renueva mientras dure
+    if (p.ctrl) SDL_GameControllerRumble(p.ctrl, p.rumbleStrong, p.rumbleWeak, 2000);
 }
 
 bool Gamepad::rewindHeld() const

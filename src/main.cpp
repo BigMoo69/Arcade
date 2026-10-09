@@ -14,6 +14,7 @@
 #include "gamelistmodel.h"
 #include "gamepad.h"
 #include "libretrocore.h"
+#include "theme.h"
 
 #ifdef Q_OS_WIN
 #define NOMINMAX
@@ -77,10 +78,12 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    Theme theme(base); // antes que el motor QML: debe vivir más que la interfaz
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("App"), &controller);
     engine.rootContext()->setContextProperty(QStringLiteral("Games"), &games);
     engine.rootContext()->setContextProperty(QStringLiteral("Pad"), &pad);
+    engine.rootContext()->setContextProperty(QStringLiteral("Theme"), &theme);
     engine.rootContext()->setContextProperty(QStringLiteral("arcadeFont"), fontFamily);
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
@@ -129,6 +132,10 @@ int main(int argc, char *argv[])
                 win->grabWindow().save(step.mid(5));
             } else if (step == QLatin1String("exit")) {
                 controller.requestExit();
+            } else if (step == QLatin1String("toggle-pause")) {
+                controller.togglePause();
+            } else if (step == QLatin1String("wait")) {
+                // deja pasar un paso sin hacer nada
             } else if (step.startsWith(QLatin1String("type:")) || step.startsWith(QLatin1String("key:"))) {
                 // "type:metal" escribe letra a letra; "key:esc" / "key:back" / "key:enter" pulsan esa tecla
                 auto press = [win](int key, const QString &text) {

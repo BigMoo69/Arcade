@@ -15,12 +15,16 @@ Window {
     color: "black"
 
     // ---------------- Tema ----------------
-    readonly property color cBg1: "#0a0a2e"
-    readonly property color cBg2: "#000000"
-    readonly property color cAccent: "#ffcc00"     // barra de selección
-    readonly property color cAccent2: "#ff3355"    // detalles rojos
-    readonly property color cText: "#e8e8ff"
-    readonly property color cDim: "#7a7aa8"
+    // Los colores vienen del tema activo (OPCIONES > TEMA; ver src/theme.cpp y themes/ejemplo/theme.ini)
+    readonly property color cBg1: Theme.c.bg1
+    readonly property color cBg2: Theme.c.bg2
+    readonly property color cAccent: Theme.c.accent      // barra de selección
+    readonly property color cAccent2: Theme.c.accent2    // números y títulos de panel
+    readonly property color cOnAccent: Theme.c.onAccent  // texto sobre la barra de selección
+    readonly property color cText: Theme.c.text
+    readonly property color cDim: Theme.c.dim
+    readonly property color cPanel: Theme.c.panel
+    readonly property color cBorder: Theme.c.border
     readonly property real  u: Math.min(width / 1280, height / 720) // unidad de escala
 
     property int current: Math.min(App.lastIndex, Math.max(0, Games.count - 1))
@@ -28,13 +32,13 @@ Window {
     property var game: (listRev, Games.count > 0 ? Games.get(current) : ({}))
     property bool optionsOpen: false
     property bool searchOpen: false
-    onSearchOpenChanged: { if (searchOpen) { video.stop(); video.source = "" } else preview.restart() }
     property bool remapOpen: false
     property string errorText: ""
 
     // ---------------- Entrada unificada (teclado + mandos) ----------------
     function act(a) {
         if (App.confirmingExit) { exitDlg.handle(a); return }
+        if (App.paused) { pauseMenu.handle(a); return }
         if (App.gameRunning) return
         if (errorText !== "") { if (a === "accept" || a === "back") errorText = ""; return }
         if (Pad.capturing) return
@@ -99,7 +103,7 @@ Window {
     MouseArea {
         anchors.fill: parent; z: 100
         hoverEnabled: true; acceptedButtons: Qt.NoButton // solo observa: los clics pasan a lo de abajo
-        cursorShape: !App.fullscreen || (win.mouseActive && (!App.gameRunning || App.confirmingExit))
+        cursorShape: !App.fullscreen || (win.mouseActive && (!App.gameRunning || App.confirmingExit || App.paused))
                      ? Qt.ArrowCursor : Qt.BlankCursor
         onPositionChanged: { win.mouseActive = true; mouseIdle.restart() }
     }
@@ -158,12 +162,23 @@ Window {
                 GradientStop { position: 1; color: win.cBg2 }
             }
         }
+        // Imagen de fondo (del tema o de la carpeta fondos/), oscurecida para que el texto se lea
+        Image {
+            id: wallpaper
+            anchors.fill: parent
+            source: Theme.background
+            visible: status === Image.Ready
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true; smooth: true
+            Rectangle { anchors.fill: parent; color: "black"; opacity: Theme.c.darken }
+        }
         Grid {
+            visible: Theme.c.showGrid
             anchors.fill: parent; opacity: 0.06
             columns: Math.ceil(parent.width / (40 * u)) + 1
             Repeater {
                 model: Math.max(0, (Math.ceil(win.width / (40 * u)) + 1) * (Math.ceil(win.height / (40 * u)) + 1))
-                Rectangle { width: 40 * u; height: 40 * u; color: "transparent"; border.color: "#4060ff"; border.width: 1 }
+                Rectangle { width: 40 * u; height: 40 * u; color: "transparent"; border.color: Theme.c.grid; border.width: 1 }
             }
         }
 
@@ -174,9 +189,9 @@ Window {
             height: 64 * u
             gradient: Gradient {
                 orientation: Gradient.Horizontal
-                GradientStop { position: 0; color: "#c00020" }
-                GradientStop { position: 0.5; color: "#ff3355" }
-                GradientStop { position: 1; color: "#c00020" }
+                GradientStop { position: 0; color: Theme.c.header1 }
+                GradientStop { position: 0.5; color: Theme.c.header2 }
+                GradientStop { position: 1; color: Theme.c.header1 }
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -216,7 +231,7 @@ Window {
             id: listPanel
             anchors { top: header.bottom; left: parent.left; bottom: footer.top; margins: 20 * u }
             width: parent.width * 0.42
-            color: "#80000020"; border.color: "#3040a0"; border.width: 2 * u; radius: 6 * u
+            color: win.cPanel; border.color: win.cBorder; border.width: 2 * u; radius: 6 * u
 
             // Barra de búsqueda siempre visible: se escribe directo con el teclado,
             // o clic / Ⓧ para abrir el teclado en pantalla
@@ -225,7 +240,7 @@ Window {
                 anchors { top: parent.top; left: parent.left; right: parent.right; margins: 8 * u }
                 height: 44 * u; radius: 4 * u
                 readonly property bool active: Games.search !== "" || win.searchOpen
-                color: "black"; border.color: active ? win.cAccent : "#3040a0"; border.width: 2 * u
+                color: "black"; border.color: active ? win.cAccent : win.cBorder; border.width: 2 * u
                 // Lupa dibujada (no depende de que la fuente tenga el símbolo)
                 Item {
                     id: lens
@@ -258,9 +273,82 @@ Window {
                 }
             }
 
+            // Teclado en pantalla: se despliega debajo de la barra (Ⓧ en el mando o clic en la barra).
+            // El preview de la derecha sigue visible y la lista de abajo se filtra mientras escribes.
+            Rectangle {
+                id: search
+                anchors { top: searchBar.bottom; left: parent.left; right: parent.right; margins: 8 * u }
+                height: win.searchOpen ? keyCol.height + 16 * u : 0
+                visible: win.searchOpen
+                clip: true
+                color: "#a0000020"; border.color: win.cAccent; border.width: 2 * u; radius: 4 * u
+                property int index: 0
+                readonly property int cols: 10
+                readonly property var keys: ["A","B","C","D","E","F","G","H","I","J",
+                                             "K","L","M","N","O","P","Q","R","S","T",
+                                             "U","V","W","X","Y","Z","0","1","2","3",
+                                             "4","5","6","7","8","9","ESP","BORRAR","LIMPIAR","LISTO"]
+                function type(ch) { if (Games.search.length < 24) win.setSearch(Games.search + ch) }
+                function backspace() { if (Games.search.length > 0) win.setSearch(Games.search.slice(0, -1)) }
+                function press(i) {
+                    var k = keys[i]
+                    if (k === "ESP") type(" ")
+                    else if (k === "BORRAR") backspace()
+                    else if (k === "LIMPIAR") win.setSearch("")
+                    else if (k === "LISTO") win.searchOpen = false
+                    else type(k)
+                }
+                function handle(a) {
+                    var rows = keys.length / cols, r = Math.floor(index / cols), c = index % cols
+                    if (a === "up") index = ((r + rows - 1) % rows) * cols + c
+                    else if (a === "down") index = ((r + 1) % rows) * cols + c
+                    else if (a === "left") index = r * cols + (c + cols - 1) % cols
+                    else if (a === "right") index = r * cols + (c + 1) % cols
+                    else if (a === "accept") press(index)
+                    else if (a === "back") { if (Games.search.length > 0) backspace(); else win.searchOpen = false }
+                    else if (a === "search") win.searchOpen = false
+                    else if (a === "pageUp") win.move(-1)      // LB/RB recorren los resultados sin cerrar
+                    else if (a === "pageDown") win.move(1)
+                    else if (a === "systemPrev") win.changeSystem(-1)
+                    else if (a === "systemNext") win.changeSystem(1)
+                }
+
+                Column {
+                    id: keyCol
+                    anchors { top: parent.top; topMargin: 8 * u; horizontalCenter: parent.horizontalCenter }
+                    spacing: 6 * u
+                    Grid {
+                        id: keyGrid
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        columns: search.cols; spacing: 5 * u
+                        Repeater {
+                            model: search.keys.length
+                            Rectangle {
+                                readonly property bool sel: index === search.index
+                                width: (search.width - 20 * u - (search.cols - 1) * 5 * u) / search.cols; height: 36 * u; radius: 4 * u
+                                color: sel ? win.cAccent : "#30ffffff"
+                                border.color: sel ? "white" : "transparent"; border.width: 2 * u
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: search.keys[index]
+                                    color: sel ? win.cOnAccent : win.cText
+                                    font.family: arcadeFont; font.bold: true
+                                    font.pixelSize: (search.keys[index].length > 1 ? 9 : 19) * u
+                                }
+                                MouseArea { anchors.fill: parent; onClicked: { search.index = index; search.press(index) } }
+                            }
+                        }
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "Ⓐ ESCRIBIR   Ⓑ BORRAR   LB/RB RESULTADOS   Ⓧ/□ LISTO"
+                        color: win.cDim; font.family: arcadeFont; font.pixelSize: 12 * u
+                    }
+                }
+            }
             ListView {
                 id: list
-                anchors { top: searchBar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom; margins: 8 * u }
+                anchors { top: search.bottom; left: parent.left; right: parent.right; bottom: parent.bottom; margins: 8 * u }
                 clip: true
                 model: Games
                 currentIndex: win.current
@@ -294,7 +382,7 @@ Window {
                         x: 10 * u; width: 64 * u
                         text: ("000" + (index + 1)).slice(-3)
                         font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
-                        color: sel ? "#300000" : win.cAccent2
+                        color: sel ? win.cOnAccent : win.cAccent2
                     }
                     // ✔ funciona · ✘ no funciona · nada = aún sin probar
                     Text {
@@ -310,7 +398,7 @@ Window {
                         text: title
                         elide: Text.ElideRight
                         font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: sel
-                        color: sel ? "black" : win.cText
+                        color: sel ? win.cOnAccent : win.cText
                     }
                 }
             }
@@ -328,7 +416,6 @@ Window {
         Item {
             id: previewArea
             anchors { top: header.bottom; left: listPanel.right; right: parent.right; bottom: footer.top; margins: 20 * u }
-            visible: !win.searchOpen
 
             Rectangle {
                 id: screenFrame
@@ -419,101 +506,6 @@ Window {
             }
         }
 
-        // ---------------- Buscador con teclado en pantalla ----------------
-        // Ocupa el lugar del preview; la lista de la izquierda se filtra mientras escribes.
-        Rectangle {
-            id: search
-            anchors.fill: previewArea
-            visible: win.searchOpen
-            color: "#80000020"; border.color: win.cAccent; border.width: 2 * u; radius: 6 * u
-            property int index: 0
-            readonly property int cols: 10
-            readonly property var keys: ["A","B","C","D","E","F","G","H","I","J",
-                                         "K","L","M","N","O","P","Q","R","S","T",
-                                         "U","V","W","X","Y","Z","0","1","2","3",
-                                         "4","5","6","7","8","9","ESP","BORRAR","LIMPIAR","LISTO"]
-            function type(ch) { if (Games.search.length < 24) win.setSearch(Games.search + ch) }
-            function backspace() { if (Games.search.length > 0) win.setSearch(Games.search.slice(0, -1)) }
-            function press(i) {
-                var k = keys[i]
-                if (k === "ESP") type(" ")
-                else if (k === "BORRAR") backspace()
-                else if (k === "LIMPIAR") win.setSearch("")
-                else if (k === "LISTO") win.searchOpen = false
-                else type(k)
-            }
-            function handle(a) {
-                var rows = keys.length / cols, r = Math.floor(index / cols), c = index % cols
-                if (a === "up") index = ((r + rows - 1) % rows) * cols + c
-                else if (a === "down") index = ((r + 1) % rows) * cols + c
-                else if (a === "left") index = r * cols + (c + cols - 1) % cols
-                else if (a === "right") index = r * cols + (c + 1) % cols
-                else if (a === "accept") press(index)
-                else if (a === "back") { if (Games.search.length > 0) backspace(); else win.searchOpen = false }
-                else if (a === "search") win.searchOpen = false
-                else if (a === "pageUp") win.move(-1)      // LB/RB recorren los resultados sin cerrar
-                else if (a === "pageDown") win.move(1)
-                else if (a === "systemPrev") win.changeSystem(-1)
-                else if (a === "systemNext") win.changeSystem(1)
-            }
-
-            Column {
-                anchors.centerIn: parent
-                spacing: 18 * u
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "BUSCAR JUEGO"; color: win.cAccent2
-                    font.family: arcadeFont; font.pixelSize: 30 * u; font.bold: true
-                }
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: keyGrid.width; height: 52 * u; radius: 4 * u
-                    color: "black"; border.color: win.cAccent; border.width: 2 * u
-                    Text {
-                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 14 * u }
-                        text: Games.search + (cursorBlink.on ? "_" : " ")
-                        color: "white"; font.family: arcadeFont; font.pixelSize: 26 * u; font.bold: true
-                    }
-                    Timer { id: cursorBlink; property bool on: true; interval: 450; repeat: true; running: win.searchOpen; onTriggered: on = !on }
-                }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: Games.count === 1 ? "1 JUEGO ENCONTRADO" : Games.count + " JUEGOS ENCONTRADOS"
-                    color: Games.count > 0 ? win.cText : win.cAccent2
-                    font.family: arcadeFont; font.pixelSize: 18 * u
-                }
-                Grid {
-                    id: keyGrid
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    columns: search.cols; spacing: 6 * u
-                    Repeater {
-                        model: search.keys.length
-                        Rectangle {
-                            readonly property bool sel: index === search.index
-                            width: Math.min(60 * u, (search.width - 80 * u) / search.cols - 6 * u); height: 48 * u; radius: 4 * u
-                            color: sel ? win.cAccent : "#30ffffff"
-                            border.color: sel ? "white" : "transparent"; border.width: 2 * u
-                            Text {
-                                anchors.centerIn: parent
-                                text: search.keys[index]
-                                color: sel ? "black" : win.cText
-                                font.family: arcadeFont; font.bold: true
-                                font.pixelSize: (search.keys[index].length > 1 ? 11 : 22) * u
-                            }
-                            MouseArea { anchors.fill: parent; onClicked: { search.index = index; search.press(index) } }
-                        }
-                    }
-                }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    horizontalAlignment: Text.AlignHCenter
-                    width: search.width - 40 * u; wrapMode: Text.WordWrap
-                    text: "Ⓐ ESCRIBIR   Ⓑ BORRAR   LB/RB RECORRER RESULTADOS   Ⓧ/□ LISTO\nCON TECLADO NO HACE FALTA ESTO: ESCRIBE DIRECTO EN EL MENÚ"
-                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 14 * u; lineHeight: 1.3
-                }
-            }
-        }
-
         // ---------------- Pie con controles ----------------
         Rectangle {
             id: footer
@@ -569,6 +561,14 @@ Window {
                 else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Z) win.act("accept")
                 else if (e.key === Qt.Key_Escape || e.key === Qt.Key_X || e.key === Qt.Key_N) win.act("back")
                 else if (e.key === Qt.Key_S || e.key === Qt.Key_Y) App.answerExit(true)
+                e.accepted = true
+                return
+            }
+            if (App.paused) { // menú de pausa con teclado
+                if (e.key === Qt.Key_Up) win.act("up")
+                else if (e.key === Qt.Key_Down) win.act("down")
+                else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) win.act("accept")
+                else if (e.key === Qt.Key_Escape || e.key === Qt.Key_P || e.key === Qt.Key_Pause) win.act("back")
                 e.accepted = true
                 return
             }
@@ -637,7 +637,7 @@ Window {
                                 border.color: sel ? "white" : win.cDim; border.width: 2 * u
                                 Text {
                                     anchors.centerIn: parent
-                                    text: modelData; color: sel ? "black" : win.cText
+                                    text: modelData; color: sel ? win.cOnAccent : win.cText
                                     font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
                                 }
                                 MouseArea { anchors.fill: parent; onClicked: App.answerExit(index === 0) }
@@ -653,13 +653,31 @@ Window {
             }
         }
 
+        // ---------------- Menú de pausa ----------------
         Rectangle {
+            id: pauseMenu
             anchors.fill: parent
             visible: App.paused && !App.confirmingExit
             color: "#b0000000"
+            property int index: 0
+            onVisibleChanged: if (visible) index = 0
+            readonly property var items: [
+                { label: "CONTINUAR", act: function () { App.togglePause() } },
+                { label: "GUARDAR PARTIDA", act: function () { App.saveState(0) } },
+                { label: "CARGAR PARTIDA", act: function () { App.loadState(0) } },
+                { label: "REINICIAR JUEGO", act: function () { App.resetGame(); App.togglePause() } },
+                { label: "SALIR DEL JUEGO", act: function () { App.stopGame() } }
+            ]
+            function handle(a) {
+                if (a === "up") index = (index + items.length - 1) % items.length
+                else if (a === "down") index = (index + 1) % items.length
+                else if (a === "accept") items[index].act()
+                else if (a === "back" || a === "pause") App.togglePause()
+            }
+            MouseArea { anchors.fill: parent; onWheel: {} }
             Column {
                 anchors.centerIn: parent
-                spacing: 18 * u
+                spacing: 12 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "PAUSA"
@@ -673,8 +691,32 @@ Window {
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: (Pad.mapRevision, Pad.bindingName(10)) + " / P  CONTINUAR      MONEDA+START / ESC  SALIR"
-                    font.family: arcadeFont; font.pixelSize: 18 * u; color: win.cText
+                    text: App.currentTitle; color: "white"
+                    font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
+                    bottomPadding: 10 * u
+                }
+                Repeater {
+                    model: pauseMenu.items.length
+                    Rectangle {
+                        readonly property bool sel: index === pauseMenu.index
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: 440 * u; height: 44 * u; radius: 4 * u
+                        color: sel ? win.cAccent : "#40000000"
+                        border.color: sel ? "white" : "transparent"; border.width: 2 * u
+                        Text {
+                            anchors.centerIn: parent
+                            text: pauseMenu.items[index].label
+                            color: sel ? win.cOnAccent : win.cText
+                            font.family: arcadeFont; font.pixelSize: 21 * u; font.bold: true
+                        }
+                        MouseArea { anchors.fill: parent; onClicked: { pauseMenu.index = index; pauseMenu.items[index].act() } }
+                    }
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    topPadding: 8 * u
+                    text: "▲▼ ELEGIR    Ⓐ / ENTER ACEPTAR    Ⓑ / " + (Pad.mapRevision, Pad.bindingName(10)) + " / P CONTINUAR"
+                    font.family: arcadeFont; font.pixelSize: 15 * u; color: win.cDim
                 }
             }
         }
@@ -686,22 +728,26 @@ Window {
     Rectangle {
         id: options
         anchors.fill: parent
-        color: "#c0000000"
+        color: "#90000000" // deja ver el menú detrás para apreciar el tema y el fondo al cambiarlos
         visible: win.optionsOpen && !win.remapOpen && !App.gameRunning
         property int index: 0
+        // "side" = lo que hacen ◄ ► en esa fila (anterior / siguiente)
         readonly property var items: [
             { label: "CONTINUAR", act: function () { win.optionsOpen = false } },
+            { label: "◄ TEMA: " + Theme.name + " ►", act: function () { Theme.nextTheme(1) }, side: function (d) { Theme.nextTheme(d) } },
+            { label: "◄ FONDO: " + Theme.backgroundName.substring(0, 24) + " ►", act: function () { Theme.nextBackground(1) }, side: function (d) { Theme.nextBackground(d) } },
             { label: "SCANLINES: " + (App.scanlines ? "SÍ" : "NO"), act: function () { App.scanlines = !App.scanlines } },
             { label: "FILTRO SUAVE: " + (App.smooth ? "SÍ" : "NO"), act: function () { App.smooth = !App.smooth } },
             { label: "PANTALLA COMPLETA: " + (App.fullscreen ? "SÍ" : "NO"), act: function () { App.fullscreen = !App.fullscreen } },
             { label: "CONFIGURAR CONTROLES", act: function () { remap.index = 0; win.remapOpen = true } },
-            { label: "RECARGAR LISTA DE JUEGOS", act: function () { Games.rescan(); win.current = 0; win.optionsOpen = false } },
+            { label: "RECARGAR JUEGOS, TEMAS Y FONDOS", act: function () { Games.rescan(); Theme.reload(); win.current = 0; win.optionsOpen = false } },
             { label: "SALIR", act: function () { App.quit() } }
         ]
         function handle(a) {
             if (a === "up") index = (index + items.length - 1) % items.length
             else if (a === "down") index = (index + 1) % items.length
             else if (a === "accept") items[index].act()
+            else if ((a === "left" || a === "right") && items[index].side) items[index].side(a === "left" ? -1 : 1)
             else if (a === "back") win.optionsOpen = false
         }
         MouseArea { anchors.fill: parent; onClicked: win.optionsOpen = false; onWheel: {} } // clic fuera = cerrar
@@ -727,7 +773,7 @@ Window {
                         Text {
                             anchors.centerIn: parent
                             text: options.items[index].label
-                            color: index === options.index ? "black" : win.cText
+                            color: index === options.index ? win.cOnAccent : win.cText
                             font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
                         }
                         MouseArea { anchors.fill: parent; onClicked: { options.index = index; options.items[index].act() } }
@@ -795,7 +841,7 @@ Window {
                             x: 16 * u
                             visible: index < remap.actions
                             text: Pad.actionName(index)
-                            color: sel ? "black" : win.cText
+                            color: sel ? win.cOnAccent : win.cText
                             font.family: arcadeFont; font.pixelSize: 19 * u; font.bold: true
                         }
                         Text {
@@ -809,7 +855,7 @@ Window {
                             anchors.centerIn: parent
                             visible: index >= remap.actions
                             text: index === remap.actions ? "RESTABLECER" : "VOLVER"
-                            color: sel ? "black" : win.cText
+                            color: sel ? win.cOnAccent : win.cText
                             font.family: arcadeFont; font.pixelSize: 19 * u; font.bold: true
                         }
                         MouseArea { anchors.fill: parent; onClicked: if (!Pad.capturing) { remap.index = index; remap.handle("accept") } }

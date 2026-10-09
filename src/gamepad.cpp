@@ -313,6 +313,16 @@ void Gamepad::menuTick()
         return;
     }
 
+    // El botón de pausa también cuenta en modo menú: sirve para cerrar el menú de pausa
+    bool pauseBtn = false;
+    for (const Pad &p : m_pads) pauseBtn |= p.pause;
+    if (pauseBtn && !m_pauseLatch) {
+        m_pauseLatch = true;
+        emit menuAction(QStringLiteral("pause"));
+    } else if (!pauseBtn) {
+        m_pauseLatch = false;
+    }
+
     const uint16_t pressed = mask & ~m_prevMenuMask;
     m_prevMenuMask = mask;
 

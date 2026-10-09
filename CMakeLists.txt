@@ -15,6 +15,7 @@ qt_add_executable(Arcade WIN32
     src/gamepad.h        src/gamepad.cpp
     src/gamelistmodel.h  src/gamelistmodel.cpp
     src/appcontroller.h  src/appcontroller.cpp
+    src/theme.h          src/theme.cpp
     src/libretro/libretro.h
 )
 

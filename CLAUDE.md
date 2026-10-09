@@ -18,6 +18,7 @@ El usuario habla español; responde en español, conciso y directo.
 | `src/emulatorview.*` | QQuickItem con `updatePaintNode`: textura escalada por GPU, aspecto correcto, rotación libretro (antihoraria, invierte aspecto si es impar como RetroArch), máscara de scanlines estirada |
 | `src/gamepad.*` | SDL2 sin ventana (`SDL_MAIN_HANDLED`), mapeo SDL→RetroPad (A→B, B→A, X→Y, Y→X), stick = cruceta, gatillos = L2/R2, teclado como J1 vía eventFilter en modo juego, señales `menuAction` con auto-repetición, salida con Select+Start o Guide |
 | `src/gamelistmodel.*` | Escanea `roms/*.zip|*.7z`, oculta BIOS (`neogeo`, `pgm`…), títulos: `resources/names.txt` integrado → `roms/names.txt` del usuario → DATs XML en `dats/`. Previews en `media/videos|snaps|marquees/<rom>.*` |
+| `src/theme.*` | Temas de color y fondo de pantalla (integrados + `themes/` + `fondos/`) |
 | `src/appcontroller.*` | Puente QML: launch/stop/reset/save/load, ajustes en `arcade.ini` (QSettings) |
 | `qml/Main.qml` | Toda la UI: lista numerada, preview con video (retraso 350 ms), opciones, errores, toasts, teclas F1–F11 |
 | `build_windows.bat` | Descarga SDL2 2.30.9 VC, compila (sin `-G`, usa el VS más nuevo), `windeployqt`, arma `dist/` y baja FBNeo del buildbot de libretro |
@@ -85,6 +86,14 @@ El usuario habla español; responde en español, conciso y directo.
   `zupapa`, `ganryu`, `nitd`, `rotd`, `pnyaa`, `bangbead`, `jockeygp`, `lans2004`, `neomrdo`, `gururin`,
   `janshin`, `fightfev`). `Imgs NEOGEO.zip` trae 116 PNG 640×480 (captura + caja + logo) con nombre de
   ROM; se instalaron en `dist/media/snaps/` (115 juegos; el `.png` tiene prioridad sobre el `.bmp` viejo). `NEOGEO.zip` (2,2 GB) parece ser lo mismo que `Juegos\`, no se abrió.
+- **Paquete `Downloads\tuarcade-cuarentena.part1-3.rar` (2026-10-09):** MameUI32 antiguo con 8.799 ROMs
+  (25 GB, RAR con contraseña que dio el usuario). 4.885 nombres existen en FBNeo; se extrajeron los 4.747
+  que no tenía funcionando, se verificó cada uno con `--check-rom` (8 procesos en paralelo, 71 min, en una
+  base de prueba con enlaces duros y `ARCADE_DIR`) y **pasaron 3.527**; se instalaron junto con 156 zips
+  de soporte (padres/BIOS que solos no arrancan, quedan con ✘) y 1.603 capturas. Estado: **3.865 juegos,
+  3.680 ✔ / 186 ✘**, `dist/` ≈ 10,8 GB. Ningún CPS-2, CPS-3 ni PGM de ese paquete pasó (sets demasiado
+  viejos). De los 14 NeoGeo pendientes entraron 9; siguen mal `fightfev`, `gururin`, `janshin`, `neomrdo`,
+  `pnyaa`. No se extrajeron el exe, los CHD ni los 3.914 ROMs que FBNeo no conoce. ~2.060 juegos sin imagen.
 - **NeoRAGEx 5.2a** (`Desktop\NeoRAGEx 5.2a`, de donde salieron ROMs y capturas): ignora el parámetro de
   línea de comandos (abre su menú) y cambia la pantalla a 640×480, así que no sirve como emulador de
   respaldo lanzado desde el Arcade. Es de código cerrado; no se puede fusionar con FBNeo.
@@ -102,13 +111,26 @@ El usuario habla español; responde en español, conciso y directo.
   buscador con teclado en pantalla (A escribe, B borra, LB/RB recorre resultados). Teclado: Tab/Shift+Tab
   sistema. Hay una barra de búsqueda fija sobre la lista (`searchBar`): en el menú las letras y números
   escriben directo en ella (ya no existen los atajos Z/X/Q/W/1/F), Retroceso borra, Esc limpia y la ✕ o un
-  clic en la barra la limpian / abren el teclado en pantalla. `lastIndex` guarda la posición en la lista completa.
+  clic en la barra la limpian / abren el teclado en pantalla. El teclado en pantalla (`search`) se despliega
+  dentro del panel de la lista, entre la barra y los resultados; el preview de la derecha no se tapa. `lastIndex` guarda la posición en la lista completa.
   Hoy el usuario solo tiene NEO GEO, así que LT/RT avisa "solo hay un sistema".
+- **Temas y fondos (2026-10-08):** `src/theme.*` (context prop `Theme`). `Theme.c` es un mapa con
+  accent, accent2, onAccent, text, dim, bg1, bg2, header1, header2, panel, border, grid, showGrid, darken;
+  `Main.qml` toma de ahí `cAccent`, `cPanel`, etc. 5 temas integrados (clásico, neón, fósforo verde,
+  atardecer, hielo) + temas del usuario en `themes/<carpeta>/theme.ini` (líneas `clave = valor`, `;` para
+  notas; se crea `themes/ejemplo/` como plantilla; `background.*` en la carpeta = fondo del tema).
+  Fondos sueltos en `fondos/` (png/jpg/bmp). Se eligen en Opciones con ◄► ("TEMA", "FONDO": el del tema →
+  ninguno → cada imagen) y se guardan en `ui/theme` y `ui/background` de `arcade.ini`. En `dist/fondos/`
+  hay 17 fondos copiados de los skins de NeoRAGEx del usuario. `Theme` se crea antes que el motor QML.
 - **Mouse en el menú (2026-10-08):** clic selecciona, doble clic (fila o preview) juega, rueda recorre;
   son clicables la etiqueta de sistema (mitad izq./der.), el pie (JUGAR/OPCIONES/BUSCAR/SISTEMA), las
   opciones, el remapeo, las teclas del buscador y los avisos; clic fuera de un panel lo cierra. El cursor
   aparece al mover el mouse y se oculta a los 3 s (en juego solo durante el aviso de salir). La lista ya
   no se arrastra (`interactive: false`).
+- **Menú de pausa (2026-10-09):** la pausa (R3 / P) ya no es solo un letrero: `pauseMenu` en `Main.qml`
+  ofrece CONTINUAR, GUARDAR PARTIDA, CARGAR PARTIDA, REINICIAR JUEGO y SALIR DEL JUEGO (este sale directo,
+  sin el aviso de confirmación). `AppController::togglePause()` pone el mando en modo menú mientras dura
+  la pausa; `Gamepad::menuTick` emite `menuAction("pause")` con el botón de pausa para poder cerrarla.
 - **Aviso al salir del juego:** Select+Start / Guide / Esc llaman a `AppController::requestExit()`, que
   congela el juego, pone el mando en modo menú y muestra "¿SALIR DEL JUEGO?" (`exitDlg` en `Main.qml`)
   con "NO" marcado por defecto; `answerExit(bool)` sale o reanuda (respeta si ya estaba en pausa).

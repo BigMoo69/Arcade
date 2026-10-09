@@ -58,7 +58,14 @@ bool AppController::gameRunning() const { return m_core->isRunning(); }
 bool AppController::paused() const { return m_core->isPaused(); }
 void AppController::togglePause()
 {
-    if (!m_confirmExit) m_core->setPaused(!m_core->isPaused());
+    if (m_confirmExit || !m_core->isRunning()) return;
+    if (!m_core->isPaused()) {
+        m_core->setPaused(true);
+        m_pad->setMode(Gamepad::MenuMode); // la pausa tiene menú: se navega como el resto de menús
+    } else {
+        m_pad->setMode(Gamepad::GameMode);
+        m_core->setPaused(false);
+    }
 }
 
 void AppController::requestExit()
@@ -76,9 +83,10 @@ void AppController::answerExit(bool leave)
     if (!m_confirmExit) return;
     if (leave) { stopGame(); return; } // gameStopped limpia el aviso
     m_confirmExit = false;
-    m_pad->setMode(Gamepad::GameMode);
-    if (!m_pausedBeforeConfirm) m_core->setPaused(false);
-    m_pad->setPaused(m_core->isPaused());
+    if (!m_pausedBeforeConfirm) { // si ya estaba en pausa, se queda en el menú de pausa
+        m_pad->setMode(Gamepad::GameMode);
+        m_core->setPaused(false);
+    }
     emit confirmingExitChanged();
 }
 

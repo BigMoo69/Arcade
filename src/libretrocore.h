@@ -7,6 +7,8 @@
 #include <QLibrary>
 #include <QHash>
 #include <QStringList>
+#include <QVariantList>
+#include <QVector>
 #include <QMutex>
 #include <QElapsedTimer>
 #include <QTimer>
@@ -37,6 +39,19 @@ public:
 
     void setPaused(bool paused);
     bool isPaused() const { return m_paused; }
+
+    // Avance rápido: corre tantos cuadros como dé tiempo, sin sonido
+    void setFastForward(bool on);
+    bool fastForward() const { return m_fast; }
+    void setVolume(double v); // 0..1
+
+    // Cuadro actual ya girado y con la proporción de pantalla correcta (capturas y miniaturas)
+    QImage screenshot() const;
+
+    // Opciones que el núcleo declara (dificultad, región, DIP switches…): lista de
+    // { key, label, value, values[] }. setOption la cambia en caliente; devuelve false si no existe.
+    QVariantList options() const;
+    bool setOption(const QByteArray &key, const QByteArray &value);
 
     // Lo que el núcleo echó en falta al cargar el último juego (vacío = todo bien).
     // FBNeo devuelve "cargado" aunque falten ROMs y muestra su propia pantalla de error.
@@ -132,7 +147,12 @@ private:
 
     // Opciones de núcleo: clave -> valor actual
     QHash<QByteArray, QByteArray> m_vars, m_overrides;
+    struct OptDef { QByteArray key; QString label; QList<QByteArray> values; };
+    QVector<OptDef> m_optDefs;
     bool m_varsDirty = false;
+    bool m_varsUpdated = false; // hay un cambio que el núcleo aún no ha leído
+    bool m_fast = false;
+    double m_volume = 1.0;
     QByteArray m_getVarBuf;
 
     // Audio

@@ -333,6 +333,8 @@ void Gamepad::menuTick()
         emit menuAction(QStringLiteral("back"));
     if (pressed & bit(RETRO_DEVICE_ID_JOYPAD_Y))        // Xbox X / PS □
         emit menuAction(QStringLiteral("search"));
+    if (pressed & bit(RETRO_DEVICE_ID_JOYPAD_X))        // Xbox Y / PS △
+        emit menuAction(QStringLiteral("favorite"));
     if (pressed & bit(RETRO_DEVICE_ID_JOYPAD_L2))       // gatillos: cambiar de sistema
         emit menuAction(QStringLiteral("systemPrev"));
     if (pressed & bit(RETRO_DEVICE_ID_JOYPAD_R2))

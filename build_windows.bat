@@ -49,7 +49,7 @@ REM ---- Emuladores (nucleos libretro) ----
 REM fbneo = arcade (los .zip sueltos en roms\). Los demas son los sistemas de cores\sistemas.ini.
 REM Solo se descargan los que falten: un nucleo ya instalado no se reemplaza, porque una version
 REM nueva puede exigir ROMs distintos. Para actualizar uno, borra su .dll de dist\cores y vuelve a ejecutar.
-set CORES=fbneo snes9x genesis_plus_gx fceumm gambatte mgba mame2003_plus pcsx_rearmed
+set CORES=fbneo snes9x genesis_plus_gx fceumm gambatte mgba mednafen_pce_fast mame2003_plus pcsx_rearmed
 for %%c in (%CORES%) do (
     if not exist dist\cores\%%c_libretro.dll (
         echo Descargando nucleo %%c...

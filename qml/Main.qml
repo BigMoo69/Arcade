@@ -34,6 +34,7 @@ Window {
     property bool searchOpen: false
     property bool remapOpen: false
     property string errorText: ""
+    readonly property var aspectNames: ["ORIGINAL", "PÍXELES EXACTOS", "ESTIRADA"]
 
     // ---------------- Entrada unificada (teclado + mandos) ----------------
     function act(a) {
@@ -57,7 +58,21 @@ Window {
         case "search":     search.index = 0; searchOpen = true; break
         case "systemPrev": changeSystem(-1); break
         case "systemNext": changeSystem(1); break
+        case "favorite":   toggleFavorite(); break
         }
+    }
+    function toggleFavorite() {
+        if (Games.count === 0) return
+        var title = game.title, src = Games.sourceRow(current)
+        var on = Games.toggleFavorite(current)
+        toast.show(on ? "★ " + title + " AÑADIDO A FAVORITOS" : title + " QUITADO DE FAVORITOS")
+        var row = Games.rowOfSource(src) // en la lista de favoritos el juego desaparece al quitarlo
+        select(row >= 0 ? row : Math.max(0, Math.min(current, Games.count - 1)))
+    }
+    function playTimeText(secs) {
+        if (secs < 60) return "MENOS DE 1 MIN"
+        var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60)
+        return h > 0 ? h + " H " + m + " MIN" : m + " MIN"
     }
     // Cambia el filtro conservando el juego seleccionado si sigue visible
     function refilter(change) {
@@ -67,7 +82,6 @@ Window {
         select(row >= 0 ? row : 0)
     }
     function changeSystem(dir) {
-        if (Games.systems.length < 2) { toast.show("SOLO HAY UN SISTEMA: " + (Games.systems[0] || "—")); return }
         refilter(function () { Games.cycleSystem(dir) })
     }
     function setSearch(text) { Games.search = text; select(0) }
@@ -84,6 +98,7 @@ Window {
     Connections {
         target: Games
         function onFilterChanged() { win.listRev++ }
+        function onDataChanged() { win.listRev++ } // favorito / veces jugado del juego seleccionado
     }
     Connections {
         target: App
@@ -126,6 +141,7 @@ Window {
             map[Qt.Key_Escape] = "back"; map[Qt.Key_Backspace] = "back"
             // Las letras y números no son atajos: en el menú escriben directo en la barra de búsqueda
             if (e.key === Qt.Key_F11) { App.fullscreen = !App.fullscreen; e.accepted = true; return }
+            if ((e.key === Qt.Key_F2 || e.key === Qt.Key_Insert) && !Pad.capturing) { win.act("favorite"); e.accepted = true; return }
             if (Pad.capturing) { if (e.key === Qt.Key_Escape) Pad.cancelCapture(); e.accepted = true; return }
             if (win.searchOpen) {
                 // Con teclado real se escribe directo; las flechas mueven el teclado en pantalla
@@ -394,7 +410,15 @@ Window {
                         color: status > 0 ? (sel ? "#006020" : "#40e070") : (sel ? "#900000" : "#ff4050")
                     }
                     Text {
-                        anchors { verticalCenter: parent.verticalCenter; left: num.right; right: mark.left; rightMargin: 6 * u }
+                        id: star
+                        anchors { verticalCenter: parent.verticalCenter; right: mark.left }
+                        width: favorite ? 24 * u : 0; horizontalAlignment: Text.AlignHCenter
+                        text: favorite ? "★" : ""
+                        font.pixelSize: 19 * u
+                        color: sel ? win.cOnAccent : "#ffd040"
+                    }
+                    Text {
+                        anchors { verticalCenter: parent.verticalCenter; left: num.right; right: star.left; rightMargin: 6 * u }
                         text: title
                         elide: Text.ElideRight
                         font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: sel
@@ -405,8 +429,11 @@ Window {
             Text {
                 anchors.centerIn: parent; visible: Games.count === 0
                 horizontalAlignment: Text.AlignHCenter
-                text: Games.total > 0 ? "SIN RESULTADOS\n\nPrueba con otra palabra\no cambia de sistema"
-                                      : "NO HAY JUEGOS\n\nCopia tus archivos .zip en:\n" + App.baseDir + "/roms"
+                text: Games.total === 0 ? "NO HAY JUEGOS\n\nCopia tus archivos .zip en:\n" + App.baseDir + "/roms"
+                      : Games.search !== "" ? "SIN RESULTADOS\n\nPrueba con otra palabra\no cambia de sistema"
+                      : Games.system.indexOf("FAVORITOS") >= 0 ? "AÚN NO TIENES FAVORITOS\n\nElige un juego y pulsa Ⓨ/△ o F2\npara añadirlo aquí"
+                      : Games.system === "RECIENTES" ? "AÚN NO HAS JUGADO NADA\n\nAquí aparecerán los últimos\njuegos que abras"
+                      : "SIN RESULTADOS\n\nPrueba con otra palabra\no cambia de sistema"
                 font.family: arcadeFont; font.pixelSize: 18 * u; color: win.cDim; wrapMode: Text.WrapAnywhere
                 width: parent.width - 40 * u
             }
@@ -503,6 +530,16 @@ Window {
                     font.family: arcadeFont; font.pixelSize: 18 * u
                     color: win.cDim; horizontalAlignment: Text.AlignHCenter
                 }
+                Text {
+                    width: parent.width
+                    visible: text !== ""
+                    text: (win.game.favorite ? "★ FAVORITO" : "")
+                          + (win.game.favorite && win.game.plays > 0 ? "  ·  " : "")
+                          + (win.game.plays > 0 ? "JUGADO " + win.game.plays + (win.game.plays === 1 ? " VEZ" : " VECES")
+                                                  + "  ·  " + win.playTimeText(win.game.playTime) : "")
+                    font.family: arcadeFont; font.pixelSize: 16 * u
+                    color: win.cAccent; horizontalAlignment: Text.AlignHCenter
+                }
             }
         }
 
@@ -516,14 +553,15 @@ Window {
             // Ayuda de controles; las que tienen acción también son botones para el mouse
             Row {
                 anchors.verticalCenter: parent.verticalCenter; x: 24 * u
-                spacing: 26 * u
+                spacing: 20 * u
                 Repeater {
                     model: [ { t: "▲▼ ELEGIR", a: "" }, { t: "◄► SALTAR 10", a: "" }, { t: "LB/RB LETRA", a: "" },
                              { t: "Ⓐ/✕ JUGAR", a: "accept" }, { t: "Ⓑ/○ OPCIONES", a: "back" },
-                             { t: "Ⓧ/□ BUSCAR", a: "search" }, { t: "LT/RT SISTEMA", a: "systemNext" } ]
+                             { t: "Ⓧ/□ BUSCAR", a: "search" }, { t: "Ⓨ/△ FAVORITO", a: "favorite" },
+                             { t: "LT/RT LISTA", a: "systemNext" } ]
                     Text {
                         text: modelData.t
-                        font.family: arcadeFont; font.pixelSize: 16 * u; color: win.cText
+                        font.family: arcadeFont; font.pixelSize: 15 * u; color: win.cText
                         MouseArea {
                             anchors.fill: parent; anchors.margins: -8 * u
                             enabled: modelData.a !== ""
@@ -555,6 +593,7 @@ Window {
         visible: App.gameRunning
         scanlines: App.scanlines
         smooth: App.smooth
+        aspectMode: App.aspectMode
         Keys.onPressed: (e) => {
             if (App.confirmingExit) {
                 if (e.key === Qt.Key_Left || e.key === Qt.Key_Right) win.act("left")
@@ -567,8 +606,11 @@ Window {
             if (App.paused) { // menú de pausa con teclado
                 if (e.key === Qt.Key_Up) win.act("up")
                 else if (e.key === Qt.Key_Down) win.act("down")
+                else if (e.key === Qt.Key_Left) win.act("left")
+                else if (e.key === Qt.Key_Right) win.act("right")
                 else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) win.act("accept")
-                else if (e.key === Qt.Key_Escape || e.key === Qt.Key_P || e.key === Qt.Key_Pause) win.act("back")
+                else if (e.key === Qt.Key_Escape || e.key === Qt.Key_Backspace) win.act("back")
+                else if (e.key === Qt.Key_P || e.key === Qt.Key_Pause) win.act("pause")
                 e.accepted = true
                 return
             }
@@ -576,8 +618,13 @@ Window {
             case Qt.Key_F1:  App.resetGame(); break
             case Qt.Key_F2:  App.scanlines = !App.scanlines; toast.show(App.scanlines ? "Scanlines ON" : "Scanlines OFF"); break
             case Qt.Key_F3:  App.smooth = !App.smooth; toast.show(App.smooth ? "Filtro suave ON" : "Pixeles nítidos"); break
+            case Qt.Key_F4:  App.fastForward = !App.fastForward; break
             case Qt.Key_F5:  App.saveState(0); break
             case Qt.Key_F7:  App.loadState(0); break
+            case Qt.Key_F8:  App.aspectMode = App.aspectMode + 1; toast.show("IMAGEN: " + win.aspectNames[App.aspectMode]); break
+            case Qt.Key_F9:  App.volume = App.volume - 10; toast.show("VOLUMEN " + App.volume + " %"); break
+            case Qt.Key_F10: App.volume = App.volume + 10; toast.show("VOLUMEN " + App.volume + " %"); break
+            case Qt.Key_F12: App.takeScreenshot(); break
             case Qt.Key_F11: App.fullscreen = !App.fullscreen; break
             default: return
             }
@@ -653,6 +700,15 @@ Window {
             }
         }
 
+        // Aviso fijo mientras el avance rápido está activo
+        Text {
+            anchors { top: parent.top; right: parent.right; margins: 20 * u }
+            visible: App.fastForward && !App.paused
+            text: "►► AVANCE RÁPIDO"
+            font.family: arcadeFont; font.pixelSize: 22 * u; font.bold: true
+            color: win.cAccent; style: Text.Outline; styleColor: "black"
+        }
+
         // ---------------- Menú de pausa ----------------
         Rectangle {
             id: pauseMenu
@@ -660,28 +716,41 @@ Window {
             visible: App.paused && !App.confirmingExit
             color: "#b0000000"
             property int index: 0
-            onVisibleChanged: if (visible) index = 0
+            property string panel: "" // "" = menú, "save" / "load" = ranuras, "core" = opciones del emulador
+            onVisibleChanged: if (visible) { index = 0; panel = "" }
             readonly property var items: [
                 { label: "CONTINUAR", act: function () { App.togglePause() } },
-                { label: "GUARDAR PARTIDA", act: function () { App.saveState(0) } },
-                { label: "CARGAR PARTIDA", act: function () { App.loadState(0) } },
+                { label: "GUARDAR PARTIDA", act: function () { slots.index = 0; pauseMenu.panel = "save" } },
+                { label: "CARGAR PARTIDA", act: function () { slots.index = 0; pauseMenu.panel = "load" } },
+                { label: "◄ VOLUMEN: " + App.volume + " % ►", act: function () { App.volume = App.volume >= 100 ? 0 : App.volume + 10 },
+                  side: function (d) { App.volume = App.volume + d * 10 } },
+                { label: "◄ IMAGEN: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 },
+                  side: function (d) { App.aspectMode = App.aspectMode + d } },
+                { label: "AVANCE RÁPIDO: " + (App.fastForward ? "SÍ" : "NO"), act: function () { App.fastForward = !App.fastForward } },
+                { label: "CAPTURAR PANTALLA", act: function () { App.takeScreenshot() } },
+                { label: "OPCIONES DEL EMULADOR", act: function () { coreOpts.index = 0; pauseMenu.panel = "core" } },
                 { label: "REINICIAR JUEGO", act: function () { App.resetGame(); App.togglePause() } },
                 { label: "SALIR DEL JUEGO", act: function () { App.stopGame() } }
             ]
             function handle(a) {
+                if (a === "pause") { App.togglePause(); return }
+                if (panel === "core") { coreOpts.handle(a); return }
+                if (panel !== "") { slots.handle(a); return }
                 if (a === "up") index = (index + items.length - 1) % items.length
                 else if (a === "down") index = (index + 1) % items.length
                 else if (a === "accept") items[index].act()
-                else if (a === "back" || a === "pause") App.togglePause()
+                else if ((a === "left" || a === "right") && items[index].side) items[index].side(a === "left" ? -1 : 1)
+                else if (a === "back") App.togglePause()
             }
             MouseArea { anchors.fill: parent; onWheel: {} }
             Column {
                 anchors.centerIn: parent
-                spacing: 12 * u
+                visible: pauseMenu.panel === ""
+                spacing: 7 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "PAUSA"
-                    font.family: arcadeFont; font.pixelSize: 72 * u; font.bold: true
+                    font.family: arcadeFont; font.pixelSize: 56 * u; font.bold: true
                     color: win.cAccent; style: Text.Outline; styleColor: "#600010"
                     SequentialAnimation on opacity {
                         loops: Animation.Infinite; running: App.paused
@@ -693,30 +762,196 @@ Window {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: App.currentTitle; color: "white"
                     font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
-                    bottomPadding: 10 * u
+                    bottomPadding: 8 * u
                 }
                 Repeater {
                     model: pauseMenu.items.length
                     Rectangle {
                         readonly property bool sel: index === pauseMenu.index
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: 440 * u; height: 44 * u; radius: 4 * u
+                        width: 460 * u; height: 40 * u; radius: 4 * u
                         color: sel ? win.cAccent : "#40000000"
                         border.color: sel ? "white" : "transparent"; border.width: 2 * u
                         Text {
                             anchors.centerIn: parent
                             text: pauseMenu.items[index].label
                             color: sel ? win.cOnAccent : win.cText
-                            font.family: arcadeFont; font.pixelSize: 21 * u; font.bold: true
+                            font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
                         }
-                        MouseArea { anchors.fill: parent; onClicked: { pauseMenu.index = index; pauseMenu.items[index].act() } }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: (m) => {
+                                pauseMenu.index = index
+                                var it = pauseMenu.items[index]
+                                if (it.side) it.side(m.x < width / 2 ? -1 : 1); else it.act()
+                            }
+                        }
                     }
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    topPadding: 8 * u
-                    text: "▲▼ ELEGIR    Ⓐ / ENTER ACEPTAR    Ⓑ / " + (Pad.mapRevision, Pad.bindingName(10)) + " / P CONTINUAR"
+                    topPadding: 6 * u
+                    text: "▲▼ ELEGIR    ◄► CAMBIAR    Ⓐ / ENTER ACEPTAR    Ⓑ / " + (Pad.mapRevision, Pad.bindingName(10)) + " / P CONTINUAR"
                     font.family: arcadeFont; font.pixelSize: 15 * u; color: win.cDim
+                }
+            }
+
+            // ---- Ranuras de guardado: 6 por juego, cada una con su captura y fecha ----
+            Item {
+                id: slots
+                anchors.fill: parent
+                visible: pauseMenu.panel === "save" || pauseMenu.panel === "load"
+                property int index: 0
+                readonly property bool saving: pauseMenu.panel === "save"
+                readonly property var entries: (App.stateRev, App.gameRunning ? App.stateSlots() : [])
+                function choose(i) {
+                    index = i
+                    if (saving) { App.saveState(i); pauseMenu.panel = "" }
+                    else if (entries[i].used) { App.loadState(i); App.togglePause() }
+                    else toast.show("LA RANURA " + (i + 1) + " ESTÁ VACÍA")
+                }
+                function handle(a) {
+                    if (a === "left") index = (index + 5) % 6
+                    else if (a === "right") index = (index + 1) % 6
+                    else if (a === "up" || a === "down") index = (index + 3) % 6
+                    else if (a === "accept") choose(index)
+                    else if (a === "back") pauseMenu.panel = ""
+                }
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 14 * u
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: slots.saving ? "GUARDAR PARTIDA" : "CARGAR PARTIDA"
+                        font.family: arcadeFont; font.pixelSize: 40 * u; font.bold: true
+                        color: win.cAccent; style: Text.Outline; styleColor: "#600010"
+                    }
+                    Grid {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        columns: 3; spacing: 16 * u
+                        Repeater {
+                            model: slots.entries.length
+                            Rectangle {
+                                readonly property bool sel: index === slots.index
+                                readonly property var slot: slots.entries[index]
+                                width: 300 * u; height: 236 * u; radius: 6 * u
+                                color: sel ? win.cAccent : "#c0000010"
+                                border.color: sel ? "white" : win.cBorder; border.width: 2 * u
+                                Rectangle {
+                                    id: thumb
+                                    anchors { top: parent.top; horizontalCenter: parent.horizontalCenter; topMargin: 8 * u }
+                                    width: 284 * u; height: 170 * u; color: "black"
+                                    Image {
+                                        anchors.fill: parent
+                                        source: slot.image || ""
+                                        fillMode: Image.PreserveAspectFit; smooth: false; cache: false
+                                    }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: !slot.used
+                                        text: "VACÍA"; color: win.cDim
+                                        font.family: arcadeFont; font.pixelSize: 24 * u; font.bold: true
+                                    }
+                                }
+                                Text {
+                                    anchors { top: thumb.bottom; topMargin: 6 * u; horizontalCenter: parent.horizontalCenter }
+                                    text: "RANURA " + (index + 1)
+                                    color: sel ? win.cOnAccent : win.cText
+                                    font.family: arcadeFont; font.pixelSize: 18 * u; font.bold: true
+                                }
+                                Text {
+                                    anchors { bottom: parent.bottom; bottomMargin: 6 * u; horizontalCenter: parent.horizontalCenter }
+                                    text: slot.used ? slot.when : "—"
+                                    color: sel ? win.cOnAccent : win.cDim
+                                    font.family: arcadeFont; font.pixelSize: 14 * u
+                                }
+                                MouseArea { anchors.fill: parent; onClicked: slots.choose(index) }
+                            }
+                        }
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "◄►▲▼ ELEGIR    Ⓐ / ENTER " + (slots.saving ? "GUARDAR AQUÍ" : "CARGAR") + "    Ⓑ / ESC VOLVER"
+                        font.family: arcadeFont; font.pixelSize: 15 * u; color: win.cDim
+                    }
+                }
+            }
+
+            // ---- Opciones del emulador: lo que el núcleo permite cambiar (dificultad, región, DIP…) ----
+            Item {
+                id: coreOpts
+                anchors.fill: parent
+                visible: pauseMenu.panel === "core"
+                property int index: 0
+                readonly property var entries: (App.optionsRev, App.gameRunning ? App.coreOptions() : [])
+                function step(d) { if (entries.length > 0) App.stepCoreOption(entries[index].key, d) }
+                function handle(a) {
+                    var n = entries.length
+                    if (a === "back") pauseMenu.panel = ""
+                    else if (n === 0) return
+                    else if (a === "up") index = (index + n - 1) % n
+                    else if (a === "down") index = (index + 1) % n
+                    else if (a === "pageUp") index = Math.max(0, index - 10)
+                    else if (a === "pageDown") index = Math.min(n - 1, index + 10)
+                    else if (a === "left") step(-1)
+                    else if (a === "right" || a === "accept") step(1)
+                }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 60 * u, 980 * u); height: parent.height - 80 * u
+                    color: win.cBg1; border.color: win.cAccent; border.width: 3 * u; radius: 8 * u
+                    Text {
+                        id: coreTitle
+                        anchors { top: parent.top; topMargin: 16 * u; horizontalCenter: parent.horizontalCenter }
+                        text: "OPCIONES DEL EMULADOR"; color: win.cAccent2
+                        font.family: arcadeFont; font.pixelSize: 28 * u; font.bold: true
+                    }
+                    ListView {
+                        id: coreList
+                        anchors { top: coreTitle.bottom; bottom: coreHelp.top; left: parent.left; right: parent.right; margins: 14 * u }
+                        clip: true; interactive: false
+                        model: coreOpts.entries.length
+                        currentIndex: coreOpts.index
+                        highlightMoveDuration: 0
+                        delegate: Rectangle {
+                            readonly property bool sel: index === coreOpts.index
+                            readonly property var opt: coreOpts.entries[index]
+                            width: ListView.view.width; height: 34 * u; radius: 4 * u
+                            color: sel ? win.cAccent : "transparent"
+                            Text {
+                                anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 * u; right: val.left; rightMargin: 10 * u }
+                                text: opt ? opt.label : ""; elide: Text.ElideRight
+                                color: sel ? win.cOnAccent : win.cText
+                                font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: sel
+                            }
+                            Text {
+                                id: val
+                                anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 12 * u }
+                                width: Math.min(implicitWidth, parent.width * 0.5); elide: Text.ElideRight
+                                text: opt ? "◄ " + opt.value + " ►" : ""
+                                color: sel ? win.cOnAccent : win.cAccent
+                                font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: (m) => { coreOpts.index = index; coreOpts.step(m.x < width * 0.75 ? 1 : (m.x < width * 0.875 ? -1 : 1)) }
+                                onWheel: (w) => coreOpts.handle(w.angleDelta.y > 0 ? "up" : "down")
+                            }
+                        }
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        visible: coreOpts.entries.length === 0
+                        text: "ESTE EMULADOR NO TIENE OPCIONES"; color: win.cDim
+                        font.family: arcadeFont; font.pixelSize: 20 * u
+                    }
+                    Text {
+                        id: coreHelp
+                        anchors { bottom: parent.bottom; bottomMargin: 12 * u; horizontalCenter: parent.horizontalCenter }
+                        horizontalAlignment: Text.AlignHCenter
+                        text: "▲▼ ELEGIR    ◄► CAMBIAR    LB/RB SALTAR 10    Ⓑ / ESC VOLVER\nSE GUARDAN SOLAS · ALGUNAS SOLO SE APLICAN AL REINICIAR O VOLVER A ABRIR EL JUEGO"
+                        font.family: arcadeFont; font.pixelSize: 14 * u; color: win.cDim
+                    }
                 }
             }
         }
@@ -739,6 +974,9 @@ Window {
             { label: "SCANLINES: " + (App.scanlines ? "SÍ" : "NO"), act: function () { App.scanlines = !App.scanlines } },
             { label: "FILTRO SUAVE: " + (App.smooth ? "SÍ" : "NO"), act: function () { App.smooth = !App.smooth } },
             { label: "PANTALLA COMPLETA: " + (App.fullscreen ? "SÍ" : "NO"), act: function () { App.fullscreen = !App.fullscreen } },
+            { label: "◄ IMAGEN DEL JUEGO: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 }, side: function (d) { App.aspectMode = App.aspectMode + d } },
+            { label: "◄ VOLUMEN: " + App.volume + " % ►", act: function () { App.volume = App.volume >= 100 ? 0 : App.volume + 10 }, side: function (d) { App.volume = App.volume + d * 10 } },
+            { label: "OCULTAR JUEGOS CON ✘: " + (App.hideBroken ? "SÍ" : "NO"), act: function () { win.refilter(function () { App.hideBroken = !App.hideBroken }) } },
             { label: "CONFIGURAR CONTROLES", act: function () { remap.index = 0; win.remapOpen = true } },
             { label: "RECARGAR JUEGOS, TEMAS Y FONDOS", act: function () { Games.rescan(); Theme.reload(); win.current = 0; win.optionsOpen = false } },
             { label: "SALIR", act: function () { App.quit() } }
@@ -759,7 +997,7 @@ Window {
             Column {
                 id: col
                 anchors.centerIn: parent
-                spacing: 10 * u
+                spacing: 6 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "OPCIONES"; color: win.cAccent2
@@ -768,7 +1006,7 @@ Window {
                 Repeater {
                     model: options.items.length
                     Rectangle {
-                        width: 480 * u; height: 40 * u; radius: 4 * u
+                        width: 500 * u; height: 38 * u; radius: 4 * u
                         color: index === options.index ? win.cAccent : "transparent"
                         Text {
                             anchors.centerIn: parent

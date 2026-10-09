@@ -1,6 +1,7 @@
 #pragma once
 #include <QAbstractListModel>
 #include <QHash>
+#include <QSet>
 #include <QStringList>
 #include <QVector>
 
@@ -14,6 +15,7 @@ class GameListModel : public QAbstractListModel
     Q_PROPERTY(QStringList systems READ systems NOTIFY systemsChanged) // sistemas con al menos un juego
     Q_PROPERTY(QString system READ system WRITE setSystem NOTIFY filterChanged) // "" = todos
     Q_PROPERTY(QString search READ search WRITE setSearch NOTIFY filterChanged)
+    Q_PROPERTY(bool hideBroken READ hideBroken WRITE setHideBroken NOTIFY filterChanged) // oculta los marcados con ✘
 public:
     enum Roles {
         RomRole = Qt::UserRole + 1,
@@ -21,7 +23,10 @@ public:
         VideoRole, ImageRole, MarqueeRole,
         StatusRole, // 1 = funciona, -1 = no funciona, 0 = sin probar
         SystemRole,
-        CoreRole    // archivo del núcleo libretro que lo corre ("" = FinalBurn Neo)
+        CoreRole,   // archivo del núcleo libretro que lo corre ("" = FinalBurn Neo)
+        FavoriteRole,
+        PlaysRole,    // veces jugado
+        PlayTimeRole  // segundos jugados en total
     };
 
     explicit GameListModel(QObject *parent = nullptr);
@@ -40,6 +45,15 @@ public:
     void setSystem(const QString &s);
     QString search() const { return m_search; }
     void setSearch(const QString &s);
+    bool hideBroken() const { return m_hideBroken; }
+    void setHideBroken(bool v);
+    // Listas especiales que se recorren junto con los sistemas (LT/RT)
+    static QString favoritesName() { return QStringLiteral("★ FAVORITOS"); }
+    static QString recentsName() { return QStringLiteral("RECIENTES"); }
+    // Favoritos en roms/favoritos.txt (un rom por línea); devuelve si quedó marcado
+    Q_INVOKABLE bool toggleFavorite(int row);
+    // Estadísticas en roms/jugados.txt (rom|veces|segundos|última vez)
+    void notePlayed(const QString &rom, qint64 seconds);
     // Pasa al sistema siguiente/anterior: todos → primero → … → último → todos
     Q_INVOKABLE void cycleSystem(int direction);
 
@@ -81,4 +95,10 @@ private:
     QStringList m_systems;
     QString m_system, m_search;
     QHash<QString, int> m_status;
+    struct Stat { int plays = 0; qint64 secs = 0; qint64 last = 0; };
+    QHash<QString, Stat> m_stats;
+    QSet<QString> m_favs;
+    bool m_hideBroken = false;
+    void loadUserLists();
+    void refilter();
 };

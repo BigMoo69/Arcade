@@ -11,6 +11,7 @@
 #include <QDebug>
 #include <QDirIterator>
 #include <QProcess>
+#include <QTransform>
 #include <cstdarg>
 #include <cstring>
 #include <cstdio>
@@ -54,6 +55,7 @@ void LibretroCore::unloadCore()
     m_coreInited = false;
     m_api = Api{};
     m_vars.clear();
+    m_optDefs.clear();
     m_corePath.clear();
 }
 
@@ -197,6 +199,7 @@ void LibretroCore::unloadGame()
     saveSram();
     m_api.unload_game();
     m_gameLoaded = false;
+    m_fast = false;
     if (m_paused) { m_paused = false; emit pausedChanged(); }
     m_romData.clear();
     m_frame = QImage();
@@ -265,6 +268,51 @@ void LibretroCore::setPaused(bool paused)
     emit pausedChanged();
 }
 
+void LibretroCore::setFastForward(bool on)
+{
+    m_fast = on && m_gameLoaded;
+    m_nextFrameMs = double(m_clock.nsecsElapsed()) / 1e6;
+}
+
+void LibretroCore::setVolume(double v)
+{
+    m_volume = qBound(0.0, v, 1.0);
+    if (m_sink) m_sink->setVolume(float(m_volume));
+}
+
+QImage LibretroCore::screenshot() const
+{
+    if (m_frame.isNull()) return {};
+    QImage img = m_rotation ? m_frame.transformed(QTransform().rotate(-90.0 * m_rotation)) : m_frame;
+    const int w = qRound(img.height() * aspectRatio());
+    if (w > 0 && w != img.width())
+        img = img.scaled(w, img.height(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    return img;
+}
+
+QVariantList LibretroCore::options() const
+{
+    QVariantList out;
+    for (const OptDef &d : m_optDefs) {
+        QStringList values;
+        for (const QByteArray &v : d.values) values << QString::fromUtf8(v);
+        out << QVariantMap{ { QStringLiteral("key"), QString::fromUtf8(d.key) },
+                            { QStringLiteral("label"), d.label },
+                            { QStringLiteral("value"), QString::fromUtf8(m_vars.value(d.key)) },
+                            { QStringLiteral("values"), values } };
+    }
+    return out;
+}
+
+bool LibretroCore::setOption(const QByteArray &key, const QByteArray &value)
+{
+    if (!m_vars.contains(key)) return false;
+    m_vars.insert(key, value);
+    m_overrides.insert(key, value);
+    m_varsUpdated = true;
+    return true;
+}
+
 void LibretroCore::reset()
 {
     if (m_gameLoaded) m_api.reset();
@@ -314,6 +362,12 @@ void LibretroCore::tick()
     const double frameMs = 1000.0 / fps;
     const double now = double(m_clock.nsecsElapsed()) / 1e6;
 
+    if (m_fast) { // hasta ~12 ms de emulación por vuelta; la pantalla se sigue refrescando
+        for (int i = 0; i < 8 && m_gameLoaded && double(m_clock.nsecsElapsed()) / 1e6 - now < 12.0; ++i)
+            m_api.run();
+        m_nextFrameMs = double(m_clock.nsecsElapsed()) / 1e6;
+        return;
+    }
     if (now < m_nextFrameMs) return;
 
     // Si nos atrasamos mucho (ventana arrastrada, etc.) no intentes recuperar todo.
@@ -347,6 +401,7 @@ void LibretroCore::startAudio(double sampleRate)
     m_sink = std::make_unique<QAudioSink>(dev, fmt);
     // ~80 ms de búfer: baja latencia sin cortes.
     m_sink->setBufferSize(fmt.bytesForDuration(80000));
+    m_sink->setVolume(float(m_volume));
     m_audioDev = m_sink->start();
 }
 
@@ -418,16 +473,19 @@ bool LibretroCore::environment(unsigned cmd, void *data)
 
     case RETRO_ENVIRONMENT_SET_VARIABLES: {
         // Formato: { "clave", "Descripción; default|opcion2|opcion3" }
+        m_optDefs.clear(); // el núcleo manda siempre la lista completa (FBNeo la repite al cargar el juego)
         for (auto *v = static_cast<const retro_variable *>(data); v && v->key; ++v) {
             const QByteArray key = v->key;
             QByteArray def;
+            OptDef d{ key, QString::fromUtf8(key), {} };
             if (v->value) {
                 QByteArray s = v->value;
                 const int semi = s.indexOf("; ");
-                if (semi >= 0) s = s.mid(semi + 2);
-                const int bar = s.indexOf('|');
-                def = bar >= 0 ? s.left(bar) : s;
+                if (semi >= 0) { d.label = QString::fromUtf8(s.left(semi)); s = s.mid(semi + 2); }
+                d.values = s.split('|');
+                def = d.values.value(0);
             }
+            if (d.values.size() > 1) m_optDefs.push_back(d);
             m_vars.insert(key, m_overrides.value(key, def));
         }
         m_varsDirty = true;
@@ -444,7 +502,8 @@ bool LibretroCore::environment(unsigned cmd, void *data)
         return true;
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-        *static_cast<bool *>(data) = false;
+        *static_cast<bool *>(data) = m_varsUpdated;
+        m_varsUpdated = false;
         return true;
 
     case RETRO_ENVIRONMENT_SET_MESSAGE: {
@@ -501,7 +560,7 @@ void LibretroCore::cbAudioSample(int16_t l, int16_t r)
 size_t LibretroCore::cbAudioBatch(const int16_t *data, size_t frames)
 {
     LibretroCore *self = s_self;
-    if (!self || !self->m_audioDev || !self->m_sink) return frames;
+    if (!self || !self->m_audioDev || !self->m_sink || self->m_fast) return frames;
 
     const qsizetype bytes = qsizetype(frames * 2 * sizeof(int16_t));
     const qsizetype freeBytes = self->m_sink->bytesFree();

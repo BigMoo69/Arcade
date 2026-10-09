@@ -31,6 +31,14 @@ void EmulatorView::setSmoothFilter(bool on)
     update();
 }
 
+void EmulatorView::setAspectMode(int m)
+{
+    if (m == m_aspect) return;
+    m_aspect = m;
+    emit aspectModeChanged();
+    update();
+}
+
 // Una fila oscura entre cada línea del juego. Se estira sobre la imagen con
 // filtrado lineal, lo que da el típico degradado suave de un monitor CRT.
 QImage EmulatorView::scanlineMask(int sourceLines)
@@ -79,6 +87,15 @@ QSGNode *EmulatorView::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
     // Con rotación de 90/270 el rectángulo "sin rotar" tiene ancho y alto invertidos
     const int rot = s_core->rotation();
     const bool odd = rot & 1;
+    if (m_aspect == 2) {
+        w = width(); h = height();
+    } else if (m_aspect == 1) {
+        // Escala entera: cada línea del juego ocupa un número exacto de píxeles de la pantalla
+        const double dpr = window()->effectiveDevicePixelRatio();
+        const int srcLines = odd ? frame.width() : frame.height();
+        const int k = int(h * dpr / srcLines);
+        if (k >= 1) { h = k * srcLines / dpr; w = h * ar; }
+    }
     const double rw = odd ? h : w, rh = odd ? w : h;
     const QRectF rect(-rw / 2, -rh / 2, rw, rh);
     game->setRect(rect);

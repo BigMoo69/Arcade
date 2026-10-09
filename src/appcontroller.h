@@ -1,6 +1,8 @@
 #pragma once
 #include <QObject>
 #include <QSettings>
+#include <QElapsedTimer>
+#include <QVariantList>
 
 class LibretroCore;
 class Gamepad;
@@ -18,6 +20,12 @@ class AppController : public QObject
     Q_PROPERTY(bool smooth READ smooth WRITE setSmooth NOTIFY settingsChanged)
     Q_PROPERTY(bool fullscreen READ fullscreen WRITE setFullscreen NOTIFY settingsChanged)
     Q_PROPERTY(int lastIndex READ lastIndex WRITE setLastIndex NOTIFY settingsChanged)
+    Q_PROPERTY(int volume READ volume WRITE setVolume NOTIFY settingsChanged)         // 0..100
+    Q_PROPERTY(int aspectMode READ aspectMode WRITE setAspectMode NOTIFY settingsChanged) // ver EmulatorView
+    Q_PROPERTY(bool hideBroken READ hideBroken WRITE setHideBroken NOTIFY settingsChanged)
+    Q_PROPERTY(bool fastForward READ fastForward WRITE setFastForward NOTIFY fastForwardChanged)
+    Q_PROPERTY(int stateRev READ stateRev NOTIFY statesChanged)     // cambia al guardar una partida
+    Q_PROPERTY(int optionsRev READ optionsRev NOTIFY coreOptionsChanged)
     Q_PROPERTY(QString cabinetName READ cabinetName CONSTANT)
     Q_PROPERTY(QString baseDir READ baseDir CONSTANT)
 public:
@@ -36,6 +44,12 @@ public:
     bool fullscreen() const; void setFullscreen(bool v);
     int screenIndex() const; // video/screen en arcade.ini: 0 = monitor principal, 1, 2… = los demás
     int lastIndex() const;   void setLastIndex(int v);
+    int volume() const;      void setVolume(int v);
+    int aspectMode() const;  void setAspectMode(int v);
+    bool hideBroken() const; void setHideBroken(bool v);
+    bool fastForward() const; void setFastForward(bool v);
+    int stateRev() const { return m_stateRev; }
+    int optionsRev() const { return m_optionsRev; }
 
     Q_INVOKABLE void launch(int row);
     Q_INVOKABLE void stopGame();
@@ -47,12 +61,22 @@ public:
     Q_INVOKABLE void answerExit(bool leave);
     Q_INVOKABLE void saveState(int slot = 0);
     Q_INVOKABLE void loadState(int slot = 0);
+    // Ranuras de guardado del juego actual: [{ slot, used, image, when }]
+    Q_INVOKABLE QVariantList stateSlots() const;
+    // Guarda la pantalla en capturas/ (y como preview del juego si no tenía imagen)
+    Q_INVOKABLE void takeScreenshot();
+    // Opciones del núcleo cargado; stepCoreOption pasa al valor anterior/siguiente y lo guarda en cores/<núcleo>.ini
+    Q_INVOKABLE QVariantList coreOptions() const;
+    Q_INVOKABLE void stepCoreOption(const QString &key, int direction);
     Q_INVOKABLE void quit();
 
 signals:
     void gameRunningChanged();
     void pausedChanged();
     void confirmingExitChanged();
+    void fastForwardChanged();
+    void statesChanged();
+    void coreOptionsChanged();
     void settingsChanged();
     void menuAction(const QString &action);
     void toast(const QString &text);
@@ -69,5 +93,7 @@ private:
     QSettings m_settings;
     bool m_confirmExit = false;
     bool m_pausedBeforeConfirm = false;
-    QString m_title, m_rom;
+    QString m_title, m_rom, m_coreIni;
+    QElapsedTimer m_playClock;
+    int m_stateRev = 0, m_optionsRev = 0;
 };

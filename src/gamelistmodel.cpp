@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QDateTime>
 #include <QFileInfo>
 #include <QSet>
 #include <QTextStream>
@@ -145,7 +146,7 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "[mastersystem]\nnombre = MASTER SYSTEM\nnucleo = genesis_plus_gx_libretro.dll\ncarpeta = mastersystem\nextensiones = sms,zip\n\n"
            "[gb]\nnombre = GAME BOY\nnucleo = gambatte_libretro.dll\ncarpeta = gb\nextensiones = gb,gbc,zip\n\n"
            "[gba]\nnombre = GAME BOY ADVANCE\nnucleo = mgba_libretro.dll\ncarpeta = gba\nextensiones = gba,zip\n\n"
-           "[pcengine]\nnombre = PC ENGINE\nnucleo = mednafen_pce_fast_libretro.dll\ncarpeta = pcengine\nextensiones = pce,zip\n\n"
+           "[pcengine]\nnombre = PC ENGINE\nnucleo = mednafen_pce_fast_libretro.dll\ncarpeta = pcengine\nextensiones = pce,cue,chd,zip\n\n"
            "[psx]\nnombre = PLAYSTATION\nnucleo = pcsx_rearmed_libretro.dll\ncarpeta = psx\nextensiones = cue,chd,pbp,m3u\n\n"
            "[mame]\nnombre = MAME\nnucleo = mame2003_plus_libretro.dll\ncarpeta = mame\nextensiones = zip\n";
 }
@@ -186,10 +187,8 @@ void GameListModel::setStatus(const QString &rom, int status)
         if (at(i).rom == rom) emit dataChanged(index(i), index(i), { StatusRole });
 }
 
-void GameListModel::setSystem(const QString &s)
+void GameListModel::refilter()
 {
-    if (s == m_system) return;
-    m_system = s;
     beginResetModel();
     applyFilter();
     endResetModel();
@@ -197,15 +196,95 @@ void GameListModel::setSystem(const QString &s)
     emit countChanged();
 }
 
+void GameListModel::setSystem(const QString &s)
+{
+    if (s == m_system) return;
+    m_system = s;
+    refilter();
+}
+
 void GameListModel::setSearch(const QString &s)
 {
     if (s == m_search) return;
     m_search = s;
-    beginResetModel();
-    applyFilter();
-    endResetModel();
-    emit filterChanged();
-    emit countChanged();
+    refilter();
+}
+
+void GameListModel::setHideBroken(bool v)
+{
+    if (v == m_hideBroken) return;
+    m_hideBroken = v;
+    refilter();
+}
+
+void GameListModel::loadUserLists()
+{
+    m_favs.clear();
+    m_stats.clear();
+    QFile fav(m_base + QStringLiteral("/roms/favoritos.txt"));
+    if (fav.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&fav);
+        in.setEncoding(QStringConverter::Utf8);
+        while (!in.atEnd()) {
+            const QString rom = in.readLine().trimmed().toLower();
+            if (!rom.isEmpty() && !rom.startsWith(u'#')) m_favs.insert(rom);
+        }
+    }
+    QFile st(m_base + QStringLiteral("/roms/jugados.txt"));
+    if (st.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&st);
+        in.setEncoding(QStringConverter::Utf8);
+        while (!in.atEnd()) {
+            const QStringList p = in.readLine().trimmed().split(u'|');
+            if (p.size() < 4 || p.at(0).startsWith(u'#')) continue;
+            m_stats.insert(p.at(0).toLower(), Stat{ p.at(1).toInt(), p.at(2).toLongLong(), p.at(3).toLongLong() });
+        }
+    }
+}
+
+bool GameListModel::toggleFavorite(int row)
+{
+    if (row < 0 || row >= m_view.size()) return false;
+    const QString rom = at(row).rom;
+    const bool now = !m_favs.contains(rom);
+    if (now) m_favs.insert(rom); else m_favs.remove(rom);
+
+    QFile f(m_base + QStringLiteral("/roms/favoritos.txt"));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        QTextStream out(&f);
+        out.setEncoding(QStringConverter::Utf8);
+        QStringList roms(m_favs.cbegin(), m_favs.cend());
+        roms.sort();
+        out << "# Juegos favoritos, uno por línea\n" << roms.join(u'\n') << '\n';
+    }
+    if (m_system == favoritesName()) refilter(); // al quitarlo desaparece de esta lista
+    else emit dataChanged(index(row), index(row), { FavoriteRole });
+    return now;
+}
+
+void GameListModel::notePlayed(const QString &rom, qint64 seconds)
+{
+    Stat &s = m_stats[rom];
+    ++s.plays;
+    s.secs += seconds;
+    s.last = QDateTime::currentSecsSinceEpoch();
+
+    QFile f(m_base + QStringLiteral("/roms/jugados.txt"));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        QTextStream out(&f);
+        out.setEncoding(QStringConverter::Utf8);
+        out << "# rom|veces jugado|segundos|última vez (se actualiza solo)\n";
+        QStringList roms = m_stats.keys();
+        roms.sort();
+        for (const QString &r : roms) {
+            const Stat &v = m_stats[r];
+            out << r << '|' << v.plays << '|' << v.secs << '|' << v.last << '\n';
+        }
+    }
+    if (m_system == recentsName()) refilter();
+    else
+        for (int i = 0; i < m_view.size(); ++i)
+            if (at(i).rom == rom) emit dataChanged(index(i), index(i), { PlaysRole, PlayTimeRole });
 }
 
 void GameListModel::cycleSystem(int direction)
@@ -221,14 +300,24 @@ void GameListModel::cycleSystem(int direction)
 void GameListModel::applyFilter()
 {
     const QStringList words = m_search.toLower().split(u' ', Qt::SkipEmptyParts);
+    const bool favs = m_system == favoritesName(), recents = m_system == recentsName();
     m_view.clear();
     for (int i = 0; i < m_all.size(); ++i) {
         const Game &g = m_all.at(i);
-        if (!m_system.isEmpty() && g.system != m_system) continue;
+        if (favs) { if (!m_favs.contains(g.rom)) continue; }
+        else if (recents) { if (m_stats.value(g.rom).last == 0) continue; }
+        else if (!m_system.isEmpty() && g.system != m_system) continue;
+        if (m_hideBroken && m_status.value(g.rom, 0) < 0) continue;
         bool ok = true;
         for (const QString &w : words)
             if (!g.key.contains(w)) { ok = false; break; }
         if (ok) m_view.push_back(i);
+    }
+    if (recents) { // lo último jugado primero, solo los 30 más recientes
+        std::sort(m_view.begin(), m_view.end(), [this](int a, int b) {
+            return m_stats.value(m_all.at(a).rom).last > m_stats.value(m_all.at(b).rom).last;
+        });
+        if (m_view.size() > 30) m_view.resize(30);
     }
 }
 
@@ -253,6 +342,7 @@ void GameListModel::rescan()
     loadNamesFile(QStringLiteral(":/resources/fbneo.txt"), false);    // todo FBNeo: sistema y lo que falte
     loadDats();
     loadStatus();
+    loadUserLists();
 
     const QDir roms(m_base + QStringLiteral("/roms"));
     const auto files = roms.entryInfoList({ QStringLiteral("*.zip"), QStringLiteral("*.7z") },
@@ -315,6 +405,8 @@ void GameListModel::rescan()
     for (const Game &g : m_all)
         if (!m_systems.contains(g.system)) m_systems << g.system;
     m_systems.sort();
+    m_systems.prepend(recentsName());
+    m_systems.prepend(favoritesName());
     if (!m_systems.contains(m_system)) m_system.clear();
     applyFilter();
 
@@ -354,6 +446,9 @@ QVariant GameListModel::data(const QModelIndex &index, int role) const
     case StatusRole:  return m_status.value(g.rom, 0);
     case SystemRole:  return g.system;
     case CoreRole:    return g.core;
+    case FavoriteRole: return m_favs.contains(g.rom);
+    case PlaysRole:    return m_stats.value(g.rom).plays;
+    case PlayTimeRole: return m_stats.value(g.rom).secs;
     case VideoRole:
         return mediaFile(g.rom, { QStringLiteral("videos/"), QString() },
                          { QStringLiteral(".mp4"), QStringLiteral(".webm"), QStringLiteral(".avi"), QStringLiteral(".mkv") });
@@ -373,6 +468,7 @@ QHash<int, QByteArray> GameListModel::roleNames() const
         { RomRole, "rom" }, { TitleRole, "title" }, { YearRole, "year" },
         { MakerRole, "maker" }, { PathRole, "path" }, { VideoRole, "video" },
         { ImageRole, "image" }, { MarqueeRole, "marquee" }, { StatusRole, "status" }, { SystemRole, "system" }, { CoreRole, "core" },
+        { FavoriteRole, "favorite" }, { PlaysRole, "plays" }, { PlayTimeRole, "playTime" },
     };
 }
 

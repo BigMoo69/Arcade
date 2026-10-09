@@ -128,7 +128,10 @@ El usuario habla español; responde en español, conciso y directo.
   `mgba`, `mame2003_plus`, `pcsx_rearmed`; los 8 cargan (`Arcade.exe --core-info` los lista). MAME 2003-Plus
   probado con ROMs arcade en `roms/mame/` (galaga, dkong, sf2, tmnt, bublbobl arrancan y dibuja bien;
   `pacman` falla porque en MAME es clon de `puckman`). **Los núcleos de consola no se han probado con
-  ningún juego** (el usuario no tiene ROMs de consola todavía). `build_windows.bat` y el workflow de GitHub bajan los 8
+  ningún juego** (el usuario no tiene ROMs de consola todavía). **PC Engine (2026-10-09):** se añadió el
+  núcleo `mednafen_pce_fast` (Beetle PCE Fast, carga bien con `--core-info`; ya son 9); el sistema
+  `[pcengine]` acepta `pce,cue,chd,zip`, ROMs en `roms/pcengine/`. Los juegos de CD necesitan el BIOS
+  `syscard3.pce` en `system/` (lo pone el usuario). Sin probar con juegos. `build_windows.bat` y el workflow de GitHub bajan los 9
   núcleos; el .bat **ya no borra `dist/`** (antes hacía `rmdir`) y solo descarga los núcleos que falten,
   para no cambiar de versión un núcleo cuyos ROMs ya se verificaron. Ojo al lanzar el .bat desde las
   herramientas de esta sesión: `cmd` tiene `NoDefaultCurrentDirectoryInExePath=1`, hay que usar `.\build_windows.bat`.
@@ -149,6 +152,20 @@ El usuario habla español; responde en español, conciso y directo.
   ofrece CONTINUAR, GUARDAR PARTIDA, CARGAR PARTIDA, REINICIAR JUEGO y SALIR DEL JUEGO (este sale directo,
   sin el aviso de confirmación). `AppController::togglePause()` pone el mando en modo menú mientras dura
   la pausa; `Gamepad::menuTick` emite `menuAction("pause")` con el botón de pausa para poder cerrarla.
+- **Funciones estilo RetroArch, tanda 1 (2026-10-09):** probadas con `--test-actions` en Metal Slug 2.
+  - *Favoritos y recientes:* Y/△, F2 o Insert marcan favorito (★ en la lista, `roms/favoritos.txt`);
+    `roms/jugados.txt` guarda veces/segundos/última vez (solo partidas de ≥10 s) y el preview lo muestra.
+    "★ FAVORITOS" y "RECIENTES" (30 últimos) son listas más del ciclo LT/RT (`GameListModel::favoritesName()`).
+  - *Ocultar juegos con ✘:* Opciones (`ui/hideBroken`, `GameListModel::hideBroken`).
+  - *Pausa:* 6 ranuras de guardado con miniatura y fecha (`saves/<rom>.state<N>` + `.png`,
+    `AppController::stateSlots()`), volumen (`audio/volume`, 0–100), imagen (`video/aspect`: original /
+    píxeles exactos / estirada, `EmulatorView::aspectMode`), avance rápido (sin sonido), captura de pantalla
+    (`capturas/`; si el juego no tenía imagen pasa a ser su preview) y **opciones del emulador**: lista lo que
+    el núcleo declara por `SET_VARIABLES` y cada cambio se guarda en `cores/<núcleo>.ini`.
+  - *Teclas en juego:* F4 avance rápido, F5/F7 ranura 1, F8 imagen, F9/F10 volumen, F12 captura.
+  - Ojo en QML: no llamar `list` a una propiedad (choca con el id de la lista de juegos).
+  - **Pendiente de la lista de RetroArch:** shader CRT, rebobinar, trucos, mapeo por jugador/juego, turbo
+    y macros, teclado para J2, marcos (bezels), run-ahead, descarga de miniaturas, ocultar clones.
 - **Aviso al salir del juego:** Select+Start / Guide / Esc llaman a `AppController::requestExit()`, que
   congela el juego, pone el mando en modo menú y muestra "¿SALIR DEL JUEGO?" (`exitDlg` en `Main.qml`)
   con "NO" marcado por defecto; `answerExit(bool)` sale o reanuda (respeta si ya estaba en pausa).

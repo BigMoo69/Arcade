@@ -4,6 +4,9 @@
 #include "gamelistmodel.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
+#include <QImage>
+#include <QUrl>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -25,7 +28,14 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
 {
     connect(m_pad, &Gamepad::menuAction, this, &AppController::menuAction);
     connect(m_pad, &Gamepad::exitGameRequested, this, &AppController::requestExit);
+    m_core->setVolume(volume() / 100.0);
+    m_games->setHideBroken(hideBroken());
     connect(m_core, &LibretroCore::gameStopped, this, [this] {
+        // Cuenta como partida si duró al menos 10 s (las pruebas de carga no cuentan)
+        if (m_playClock.isValid() && m_playClock.elapsed() >= 10000)
+            m_games->notePlayed(m_rom, m_playClock.elapsed() / 1000);
+        m_playClock.invalidate();
+        emit fastForwardChanged();
         if (m_confirmExit) { m_confirmExit = false; emit confirmingExitChanged(); }
         m_pad->setMode(Gamepad::MenuMode);
         emit gameRunningChanged();
@@ -97,6 +107,31 @@ void AppController::setSmooth(bool v) { m_settings.setValue(QStringLiteral("vide
 bool AppController::fullscreen() const { return m_settings.value(QStringLiteral("video/fullscreen"), true).toBool(); }
 void AppController::setFullscreen(bool v) { m_settings.setValue(QStringLiteral("video/fullscreen"), v); emit settingsChanged(); }
 int AppController::screenIndex() const { return m_settings.value(QStringLiteral("video/screen"), 0).toInt(); }
+int AppController::volume() const { return qBound(0, m_settings.value(QStringLiteral("audio/volume"), 100).toInt(), 100); }
+void AppController::setVolume(int v)
+{
+    v = qBound(0, v, 100);
+    if (v == volume()) return;
+    m_settings.setValue(QStringLiteral("audio/volume"), v);
+    m_core->setVolume(v / 100.0);
+    emit settingsChanged();
+}
+int AppController::aspectMode() const { return qBound(0, m_settings.value(QStringLiteral("video/aspect"), 0).toInt(), 2); }
+void AppController::setAspectMode(int v) { m_settings.setValue(QStringLiteral("video/aspect"), (v % 3 + 3) % 3); emit settingsChanged(); }
+bool AppController::hideBroken() const { return m_settings.value(QStringLiteral("ui/hideBroken"), false).toBool(); }
+void AppController::setHideBroken(bool v)
+{
+    m_settings.setValue(QStringLiteral("ui/hideBroken"), v);
+    m_games->setHideBroken(v);
+    emit settingsChanged();
+}
+bool AppController::fastForward() const { return m_core->fastForward(); }
+void AppController::setFastForward(bool v)
+{
+    if (!m_core->isRunning() || v == m_core->fastForward()) return;
+    m_core->setFastForward(v);
+    emit fastForwardChanged();
+}
 int AppController::lastIndex() const { return m_settings.value(QStringLiteral("ui/lastIndex"), 0).toInt(); }
 void AppController::setLastIndex(int v)
 {
@@ -121,7 +156,8 @@ bool AppController::ensureCore(QString coreFile)
     QHash<QByteArray, QByteArray> overrides;
     QString iniName = QFileInfo(coreFile).completeBaseName();
     if (iniName.endsWith(QLatin1String("_libretro"))) iniName.chop(9);
-    QFile ini(m_base + QStringLiteral("/cores/") + iniName + QStringLiteral(".ini"));
+    m_coreIni = m_base + QStringLiteral("/cores/") + iniName + QStringLiteral(".ini");
+    QFile ini(m_coreIni);
     if (ini.open(QIODevice::ReadOnly | QIODevice::Text)) {
         while (!ini.atEnd()) {
             const QByteArray line = ini.readLine().trimmed();
@@ -185,6 +221,11 @@ void AppController::launch(int row)
     }
     m_games->setStatus(m_rom, 1);
     m_pad->setMode(Gamepad::GameMode);
+    m_playClock.start();
+    ++m_stateRev;
+    ++m_optionsRev;
+    emit statesChanged();
+    emit coreOptionsChanged();
     emit gameRunningChanged();
 }
 
@@ -206,14 +247,105 @@ QString AppController::statePath(int slot) const
 
 void AppController::saveState(int slot)
 {
-    emit toast(m_core->saveState(statePath(slot)) ? QStringLiteral("Partida guardada")
-                                                  : QStringLiteral("No se pudo guardar"));
+    const bool ok = m_core->saveState(statePath(slot));
+    if (ok) { // miniatura para reconocer la partida al cargarla
+        const QImage shot = m_core->screenshot();
+        if (!shot.isNull()) shot.save(statePath(slot) + QStringLiteral(".png"));
+        ++m_stateRev;
+        emit statesChanged();
+    }
+    emit toast(ok ? QStringLiteral("Partida guardada en la ranura %1").arg(slot + 1)
+                  : QStringLiteral("No se pudo guardar"));
 }
 
 void AppController::loadState(int slot)
 {
-    emit toast(m_core->loadState(statePath(slot)) ? QStringLiteral("Partida cargada")
-                                                  : QStringLiteral("No hay partida guardada"));
+    emit toast(m_core->loadState(statePath(slot)) ? QStringLiteral("Partida %1 cargada").arg(slot + 1)
+                                                  : QStringLiteral("No hay partida en la ranura %1").arg(slot + 1));
+}
+
+QVariantList AppController::stateSlots() const
+{
+    QVariantList out;
+    for (int slot = 0; slot < 6; ++slot) {
+        const QFileInfo fi(statePath(slot));
+        QVariantMap m{ { QStringLiteral("slot"), slot }, { QStringLiteral("used"), fi.exists() } };
+        if (fi.exists()) {
+            m.insert(QStringLiteral("when"), fi.lastModified().toString(QStringLiteral("dd/MM/yyyy  HH:mm")));
+            const QString png = fi.absoluteFilePath() + QStringLiteral(".png");
+            if (QFileInfo::exists(png)) { // el "?…" obliga a recargar la imagen si se sobrescribe la ranura
+                QUrl url = QUrl::fromLocalFile(png);
+                url.setQuery(QString::number(fi.lastModified().toSecsSinceEpoch()));
+                m.insert(QStringLiteral("image"), url.toString());
+            }
+        }
+        out << m;
+    }
+    return out;
+}
+
+void AppController::takeScreenshot()
+{
+    const QImage shot = m_core->screenshot();
+    if (shot.isNull()) { emit toast(QStringLiteral("No hay imagen que capturar")); return; }
+    const QString name = QString(m_rom).replace(u'/', u'_');
+    const QString file = m_base + QStringLiteral("/capturas/%1-%2.png")
+                             .arg(name, QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+    QDir().mkpath(QFileInfo(file).absolutePath());
+    if (!shot.save(file)) { emit toast(QStringLiteral("No se pudo guardar la captura")); return; }
+
+    // Si el juego no tenía imagen en el menú, esta captura pasa a ser su preview
+    bool hasImage = false;
+    for (int row = 0; row < m_games->rowCount() && !hasImage; ++row) {
+        const QVariantMap g = m_games->get(row);
+        if (g.value(QStringLiteral("rom")).toString() == m_rom)
+            hasImage = !g.value(QStringLiteral("image")).toString().isEmpty();
+    }
+    const QString snap = m_base + QStringLiteral("/media/snaps/") + m_rom + QStringLiteral(".png");
+    if (!hasImage && !QFileInfo::exists(snap)) {
+        QDir().mkpath(QFileInfo(snap).absolutePath());
+        shot.save(snap);
+        emit toast(QStringLiteral("Captura guardada y puesta como imagen del juego"));
+    } else {
+        emit toast(QStringLiteral("Captura guardada en la carpeta capturas"));
+    }
+}
+
+QVariantList AppController::coreOptions() const { return m_core->options(); }
+
+void AppController::stepCoreOption(const QString &key, int direction)
+{
+    for (const QVariant &v : m_core->options()) {
+        const QVariantMap o = v.toMap();
+        if (o.value(QStringLiteral("key")).toString() != key) continue;
+        const QStringList values = o.value(QStringLiteral("values")).toStringList();
+        const int n = int(values.size());
+        const int cur = int(values.indexOf(o.value(QStringLiteral("value")).toString()));
+        const QString next = values.at(((cur < 0 ? 0 : cur + (direction < 0 ? -1 : 1)) % n + n) % n);
+        if (!m_core->setOption(key.toUtf8(), next.toUtf8())) return;
+
+        // Guarda el valor en cores/<núcleo>.ini: cambia la línea de esa clave o la añade al final
+        QStringList lines;
+        QFile in(m_coreIni);
+        if (in.open(QIODevice::ReadOnly | QIODevice::Text))
+            lines = QString::fromUtf8(in.readAll()).split(u'\n');
+        in.close();
+        while (!lines.isEmpty() && lines.last().trimmed().isEmpty()) lines.removeLast();
+        const QString entry = key + QStringLiteral(" = ") + next;
+        bool found = false;
+        for (QString &line : lines) {
+            const QString t = line.trimmed();
+            if (t.startsWith(u'#') || t.startsWith(u';')) continue;
+            if (t.section(u'=', 0, 0).trimmed() == key) { line = entry; found = true; }
+        }
+        if (!found) lines << entry;
+        QFile out(m_coreIni);
+        if (out.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate))
+            out.write((lines.join(u'\n') + u'\n').toUtf8());
+        ++m_optionsRev;
+        emit coreOptionsChanged();
+        return;
+    }
 }
 
 void AppController::quit()

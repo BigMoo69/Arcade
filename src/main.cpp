@@ -7,6 +7,7 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QTimer>
+#include <QMouseEvent>
 
 #include "appcontroller.h"
 #include "emulatorview.h"
@@ -92,7 +93,7 @@ int main(int argc, char *argv[])
     if (!win) return 1;
     int shownFullscreen = -1;
     auto applyWindowMode = [&] {
-        const bool fs = controller.fullscreen();
+        const bool fs = controller.fullscreen() && !QCoreApplication::arguments().contains(QStringLiteral("--windowed"));
         if (int(fs) == shownFullscreen) return;
         shownFullscreen = fs;
         const auto screens = QGuiApplication::screens(); // el primero es el principal
@@ -112,6 +113,58 @@ int main(int argc, char *argv[])
     };
     QObject::connect(&controller, &AppController::settingsChanged, win, applyWindowMode);
     applyWindowMode();
+
+    // Prueba automática del menú sin teclado ni captura de pantalla:
+    //   Arcade.exe --test-actions "search,down,accept,shot:a.png,systemNext,shot:b.png"
+    // Ejecuta una acción de menú cada 300 ms; "shot:<archivo>" guarda la ventana en PNG. Al final cierra.
+    const int testArg = QCoreApplication::arguments().indexOf(QStringLiteral("--test-actions"));
+    if (testArg >= 0) {
+        auto *steps = new QStringList(QCoreApplication::arguments().value(testArg + 1).split(u',', Qt::SkipEmptyParts));
+        auto *timer = new QTimer(&app);
+        timer->setInterval(300);
+        QObject::connect(timer, &QTimer::timeout, &app, [=, &controller, &app] {
+            if (steps->isEmpty()) { timer->stop(); app.quit(); return; }
+            const QString step = steps->takeFirst();
+            if (step.startsWith(QLatin1String("shot:"))) {
+                win->grabWindow().save(step.mid(5));
+            } else if (step == QLatin1String("exit")) {
+                controller.requestExit();
+            } else if (step.startsWith(QLatin1String("type:")) || step.startsWith(QLatin1String("key:"))) {
+                // "type:metal" escribe letra a letra; "key:esc" / "key:back" / "key:enter" pulsan esa tecla
+                auto press = [win](int key, const QString &text) {
+                    QKeyEvent down(QEvent::KeyPress, key, Qt::NoModifier, text);
+                    QCoreApplication::sendEvent(win, &down);
+                    QKeyEvent up(QEvent::KeyRelease, key, Qt::NoModifier, text);
+                    QCoreApplication::sendEvent(win, &up);
+                };
+                const QString arg = step.section(u':', 1);
+                if (step.startsWith(u'k')) {
+                    press(arg == QLatin1String("esc") ? Qt::Key_Escape : arg == QLatin1String("back") ? Qt::Key_Backspace
+                          : Qt::Key_Return, QString());
+                } else {
+                    for (const QChar c : arg)
+                        press(c == u' ' ? Qt::Key_Space : c.isLetter() ? Qt::Key_A + (c.toUpper().unicode() - 'A')
+                                                                        : Qt::Key_0 + (c.unicode() - '0'), QString(c));
+                }
+            } else if (step.startsWith(QLatin1String("click:")) || step.startsWith(QLatin1String("dclick:"))) {
+                // "click:x;y" en fracción de la ventana (0..1), para no depender del tamaño
+                const QStringList xy = step.section(u':', 1).split(u';');
+                const QPointF pos(xy.value(0).toDouble() * win->width(), xy.value(1).toDouble() * win->height());
+                const bool dbl = step.startsWith(u'd');
+                for (QEvent::Type t : { QEvent::MouseButtonPress, QEvent::MouseButtonRelease,
+                                        dbl ? QEvent::MouseButtonDblClick : QEvent::None,
+                                        dbl ? QEvent::MouseButtonRelease : QEvent::None }) {
+                    if (t == QEvent::None) continue;
+                    QMouseEvent ev(t, pos, win->mapToGlobal(pos.toPoint()), Qt::LeftButton,
+                                   t == QEvent::MouseButtonRelease ? Qt::NoButton : Qt::LeftButton, Qt::NoModifier);
+                    QCoreApplication::sendEvent(win, &ev);
+                }
+            } else {
+                emit controller.menuAction(step);
+            }
+        });
+        QTimer::singleShot(1500, timer, [timer] { timer->start(); });
+    }
 
     // "Arcade.exe --rom mslug" arranca directo en ese juego (útil para pruebas y accesos directos)
     const QStringList args = QCoreApplication::arguments();

@@ -25,7 +25,9 @@ static const QSet<QString> &biosSet()
 
 GameListModel::GameListModel(QObject *parent) : QAbstractListModel(parent) {}
 
-void GameListModel::loadNamesFile(const QString &file)
+// Formato: zip|Título|Año|Fabricante|Sistema. Con overwrite=false solo rellena lo que falte
+// (así los títulos cortos de names.txt mandan y fbneo.txt aporta el sistema y el resto).
+void GameListModel::loadNamesFile(const QString &file, bool overwrite)
 {
     QFile f(file);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
@@ -36,11 +38,14 @@ void GameListModel::loadNamesFile(const QString &file)
         if (line.isEmpty() || line.startsWith(u'#')) continue;
         const QStringList p = line.split(u'|');
         if (p.size() < 2) continue;
-        Meta m;
-        m.title = p.value(1).trimmed();
-        m.year  = p.value(2).trimmed();
-        m.maker = p.value(3).trimmed();
-        m_meta.insert(p.value(0).trimmed().toLower(), m);
+        Meta &m = m_meta[p.value(0).trimmed().toLower()];
+        auto put = [overwrite](QString &dst, const QString &src) {
+            if (!src.isEmpty() && (overwrite || dst.isEmpty())) dst = src;
+        };
+        put(m.title, p.value(1).trimmed());
+        put(m.year, p.value(2).trimmed());
+        put(m.maker, p.value(3).trimmed());
+        put(m.system, p.value(4).trimmed());
     }
 }
 
@@ -72,7 +77,10 @@ void GameListModel::loadDats()
             } else if (x.isEndElement() && (x.name() == u"game" || x.name() == u"machine")) {
                 inGame = false;
                 // La lista integrada / la del usuario tiene prioridad (nombres más cortos)
-                if (!name.isEmpty() && !m_meta.contains(name)) m_meta.insert(name, m);
+                if (!name.isEmpty() && m_meta.value(name).title.isEmpty()) {
+                    Meta &dst = m_meta[name];
+                    dst.title = m.title; dst.year = m.year; dst.maker = m.maker;
+                }
             }
         }
     }
@@ -110,18 +118,75 @@ void GameListModel::setStatus(const QString &rom, int status)
     if (m_status.value(rom, 0) == status) return;
     m_status.insert(rom, status);
     saveStatus();
-    for (int i = 0; i < m_games.size(); ++i)
-        if (m_games.at(i).rom == rom) emit dataChanged(index(i), index(i), { StatusRole });
+    for (int i = 0; i < m_view.size(); ++i)
+        if (at(i).rom == rom) emit dataChanged(index(i), index(i), { StatusRole });
+}
+
+void GameListModel::setSystem(const QString &s)
+{
+    if (s == m_system) return;
+    m_system = s;
+    beginResetModel();
+    applyFilter();
+    endResetModel();
+    emit filterChanged();
+    emit countChanged();
+}
+
+void GameListModel::setSearch(const QString &s)
+{
+    if (s == m_search) return;
+    m_search = s;
+    beginResetModel();
+    applyFilter();
+    endResetModel();
+    emit filterChanged();
+    emit countChanged();
+}
+
+void GameListModel::cycleSystem(int direction)
+{
+    if (m_systems.isEmpty()) return;
+    const int n = int(m_systems.size()) + 1;                 // posición 0 = todos
+    const int cur = m_system.isEmpty() ? 0 : int(m_systems.indexOf(m_system)) + 1;
+    const int next = ((cur + (direction < 0 ? -1 : 1)) % n + n) % n;
+    setSystem(next == 0 ? QString() : m_systems.at(next - 1));
+}
+
+// Recalcula m_view: sistema exacto y todas las palabras de la búsqueda en el título o el nombre del zip
+void GameListModel::applyFilter()
+{
+    const QStringList words = m_search.toLower().split(u' ', Qt::SkipEmptyParts);
+    m_view.clear();
+    for (int i = 0; i < m_all.size(); ++i) {
+        const Game &g = m_all.at(i);
+        if (!m_system.isEmpty() && g.system != m_system) continue;
+        bool ok = true;
+        for (const QString &w : words)
+            if (!g.key.contains(w)) { ok = false; break; }
+        if (ok) m_view.push_back(i);
+    }
+}
+
+int GameListModel::sourceRow(int row) const
+{
+    return row >= 0 && row < m_view.size() ? m_view.at(row) : -1;
+}
+
+int GameListModel::rowOfSource(int source) const
+{
+    return int(m_view.indexOf(source));
 }
 
 void GameListModel::rescan()
 {
     beginResetModel();
     m_meta.clear();
-    m_games.clear();
+    m_all.clear();
 
-    loadNamesFile(QStringLiteral(":/resources/names.txt"));     // lista integrada
-    loadNamesFile(m_base + QStringLiteral("/roms/names.txt"));  // la del usuario sobreescribe
+    loadNamesFile(QStringLiteral(":/resources/names.txt"), true);     // títulos cortos integrados
+    loadNamesFile(m_base + QStringLiteral("/roms/names.txt"), true);  // la del usuario sobreescribe
+    loadNamesFile(QStringLiteral(":/resources/fbneo.txt"), false);    // todo FBNeo: sistema y lo que falte
     loadDats();
     loadStatus();
 
@@ -142,14 +207,29 @@ void GameListModel::rescan()
         } else {
             g.title = fi.completeBaseName().toUpper();
         }
-        m_games.push_back(g);
+        // Sistema: el del set; si es un hack con sufijo ("kof2002-5a"), el de su juego base
+        if (it != m_meta.cend()) g.system = it->system;
+        if (g.system.isEmpty() && rom.contains(u'-'))
+            g.system = m_meta.value(rom.section(u'-', 0, 0)).system;
+        if (g.system.isEmpty()) g.system = QStringLiteral("OTROS");
+        g.key = (g.title + u' ' + g.rom).toLower();
+        m_all.push_back(g);
     }
 
-    std::sort(m_games.begin(), m_games.end(), [](const Game &a, const Game &b) {
+    std::sort(m_all.begin(), m_all.end(), [](const Game &a, const Game &b) {
         return QString::compare(a.title, b.title, Qt::CaseInsensitive) < 0;
     });
 
+    m_systems.clear();
+    for (const Game &g : m_all)
+        if (!m_systems.contains(g.system)) m_systems << g.system;
+    m_systems.sort();
+    if (!m_systems.contains(m_system)) m_system.clear();
+    applyFilter();
+
     endResetModel();
+    emit systemsChanged();
+    emit filterChanged();
     emit countChanged();
 }
 
@@ -166,13 +246,13 @@ QString GameListModel::mediaFile(const QString &rom, const QStringList &subdirs,
 
 int GameListModel::rowCount(const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : int(m_games.size());
+    return parent.isValid() ? 0 : int(m_view.size());
 }
 
 QVariant GameListModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() < 0 || index.row() >= m_games.size()) return {};
-    const Game &g = m_games.at(index.row());
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_view.size()) return {};
+    const Game &g = at(index.row());
     switch (role) {
     case Qt::DisplayRole:
     case TitleRole:   return g.title;
@@ -181,6 +261,7 @@ QVariant GameListModel::data(const QModelIndex &index, int role) const
     case MakerRole:   return g.maker;
     case PathRole:    return g.path;
     case StatusRole:  return m_status.value(g.rom, 0);
+    case SystemRole:  return g.system;
     case VideoRole:
         return mediaFile(g.rom, { QStringLiteral("videos/"), QString() },
                          { QStringLiteral(".mp4"), QStringLiteral(".webm"), QStringLiteral(".avi"), QStringLiteral(".mkv") });
@@ -199,14 +280,14 @@ QHash<int, QByteArray> GameListModel::roleNames() const
     return {
         { RomRole, "rom" }, { TitleRole, "title" }, { YearRole, "year" },
         { MakerRole, "maker" }, { PathRole, "path" }, { VideoRole, "video" },
-        { ImageRole, "image" }, { MarqueeRole, "marquee" }, { StatusRole, "status" },
+        { ImageRole, "image" }, { MarqueeRole, "marquee" }, { StatusRole, "status" }, { SystemRole, "system" },
     };
 }
 
 QVariantMap GameListModel::get(int row) const
 {
     QVariantMap m;
-    if (row < 0 || row >= m_games.size()) return m;
+    if (row < 0 || row >= m_view.size()) return m;
     const QModelIndex i = index(row);
     const auto roles = roleNames();
     for (auto it = roles.cbegin(); it != roles.cend(); ++it)
@@ -216,12 +297,12 @@ QVariantMap GameListModel::get(int row) const
 
 int GameListModel::jumpLetter(int current, int direction) const
 {
-    if (m_games.isEmpty()) return 0;
-    current = qBound(0, current, int(m_games.size()) - 1);
-    auto letter = [this](int i) { return m_games.at(i).title.left(1).toUpper(); };
+    if (m_view.isEmpty()) return 0;
+    current = qBound(0, current, int(m_view.size()) - 1);
+    auto letter = [this](int i) { return at(i).title.left(1).toUpper(); };
     const QString cur = letter(current);
     if (direction > 0) {
-        for (int i = current + 1; i < m_games.size(); ++i)
+        for (int i = current + 1; i < m_view.size(); ++i)
             if (letter(i) != cur) return i;
         return 0; // vuelve al inicio
     }
@@ -229,7 +310,7 @@ int GameListModel::jumpLetter(int current, int direction) const
     int i = current;
     while (i > 0 && letter(i - 1) == cur) --i;
     if (i != current) return i;
-    if (i == 0) return int(m_games.size()) - 1;
+    if (i == 0) return int(m_view.size()) - 1;
     const QString prev = letter(i - 1);
     int j = i - 1;
     while (j > 0 && letter(j - 1) == prev) --j;

@@ -93,6 +93,31 @@ El usuario habla español; responde en español, conciso y directo.
   `startCapture()` asigna el siguiente botón pulsado e intercambia si ya estaba en uso. Se guarda en
   `input/map` de `arcade.ini`. Solo afecta al juego (el menú usa el mapeo por defecto), es el mismo
   para los 4 mandos y no cubre teclado ni direcciones. Pantalla vista; la captura con mando real sin probar.
+- **Filtro por sistema y buscador (2026-10-08):** `GameListModel` guarda todos los juegos en `m_all` y
+  expone una vista filtrada (`m_view`) por `system` y `search` (todas las palabras, en título o nombre
+  del zip). El sistema de cada ROM sale de `resources/fbneo.txt` (rom|título|año|fabricante|sistema,
+  8.421 sets generados del DAT "Arcade only" de FBNeo; regenerar con ese DAT si se actualiza el núcleo);
+  `names.txt` manda en el título y admite un 5.º campo de sistema. Hacks con sufijo (`kof2002-5a`) heredan
+  el sistema del juego base; lo desconocido va a "OTROS". Mando: LT/RT cambia de sistema, X/□ abre el
+  buscador con teclado en pantalla (A escribe, B borra, LB/RB recorre resultados). Teclado: Tab/Shift+Tab
+  sistema. Hay una barra de búsqueda fija sobre la lista (`searchBar`): en el menú las letras y números
+  escriben directo en ella (ya no existen los atajos Z/X/Q/W/1/F), Retroceso borra, Esc limpia y la ✕ o un
+  clic en la barra la limpian / abren el teclado en pantalla. `lastIndex` guarda la posición en la lista completa.
+  Hoy el usuario solo tiene NEO GEO, así que LT/RT avisa "solo hay un sistema".
+- **Mouse en el menú (2026-10-08):** clic selecciona, doble clic (fila o preview) juega, rueda recorre;
+  son clicables la etiqueta de sistema (mitad izq./der.), el pie (JUGAR/OPCIONES/BUSCAR/SISTEMA), las
+  opciones, el remapeo, las teclas del buscador y los avisos; clic fuera de un panel lo cierra. El cursor
+  aparece al mover el mouse y se oculta a los 3 s (en juego solo durante el aviso de salir). La lista ya
+  no se arrastra (`interactive: false`).
+- **Aviso al salir del juego:** Select+Start / Guide / Esc llaman a `AppController::requestExit()`, que
+  congela el juego, pone el mando en modo menú y muestra "¿SALIR DEL JUEGO?" (`exitDlg` en `Main.qml`)
+  con "NO" marcado por defecto; `answerExit(bool)` sale o reanuda (respeta si ya estaba en pausa).
+  Teclado en el aviso: ◄► + Enter, Esc/N = seguir, S = salir.
+- **Prueba de UI sin teclado ni pantalla:** (pasos extra: `exit` pide salir del juego, `click:x;y` y
+  `dclick:x;y` con coordenadas 0..1 de la ventana) `Arcade.exe --windowed --test-actions "search,down,accept,shot:a.png"`
+  con `QT_QPA_PLATFORM=offscreen`, `QT_QUICK_BACKEND=software`, `QT_QPA_FONTDIR=C:\Windows\Fonts` y
+  `QT_QPA_PLATFORM_PLUGIN_PATH=F:\Qt\<ver>\msvc2022_64\plugins\platforms`. Usar esto y NO SendKeys /
+  capturas de pantalla: el usuario suele estar trabajando en el PC y las teclas simuladas caen en sus ventanas.
 - **Herramientas de prueba:** `Arcade.exe --rom <rom>` (arranca directo) y `--check-rom <rom>` (carga sin
   ventana; `[check] OK|FALLA` en stderr con `QT_FORCE_STDERR_LOGGING=1`; `ARCADE_LOG_ALL=1` vuelca todo
   el log del núcleo). Un proceso por ROM: cargar muchos seguidos en el mismo proceso hace caer a FBNeo.

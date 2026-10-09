@@ -13,6 +13,7 @@ class AppController : public QObject
     Q_PROPERTY(bool gameRunning READ gameRunning NOTIFY gameRunningChanged)
     Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY gameRunningChanged)
     Q_PROPERTY(bool paused READ paused NOTIFY pausedChanged)
+    Q_PROPERTY(bool confirmingExit READ confirmingExit NOTIFY confirmingExitChanged)
     Q_PROPERTY(bool scanlines READ scanlines WRITE setScanlines NOTIFY settingsChanged)
     Q_PROPERTY(bool smooth READ smooth WRITE setSmooth NOTIFY settingsChanged)
     Q_PROPERTY(bool fullscreen READ fullscreen WRITE setFullscreen NOTIFY settingsChanged)
@@ -25,6 +26,7 @@ public:
 
     bool gameRunning() const;
     bool paused() const;
+    bool confirmingExit() const { return m_confirmExit; }
     QString currentTitle() const { return m_title; }
     QString baseDir() const { return m_base; }
     QString cabinetName() const;
@@ -39,6 +41,10 @@ public:
     Q_INVOKABLE void stopGame();
     Q_INVOKABLE void resetGame();
     Q_INVOKABLE void togglePause();
+    // Salir del juego pide confirmación: requestExit() congela el juego y muestra el aviso,
+    // answerExit(true) sale al menú y answerExit(false) sigue jugando.
+    Q_INVOKABLE void requestExit();
+    Q_INVOKABLE void answerExit(bool leave);
     Q_INVOKABLE void saveState(int slot = 0);
     Q_INVOKABLE void loadState(int slot = 0);
     Q_INVOKABLE void quit();
@@ -46,6 +52,7 @@ public:
 signals:
     void gameRunningChanged();
     void pausedChanged();
+    void confirmingExitChanged();
     void settingsChanged();
     void menuAction(const QString &action);
     void toast(const QString &text);
@@ -61,5 +68,7 @@ private:
     GameListModel *m_games;
     QSettings m_settings;
     bool m_coreLoaded = false;
+    bool m_confirmExit = false;
+    bool m_pausedBeforeConfirm = false;
     QString m_title, m_rom;
 };

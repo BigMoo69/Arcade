@@ -24,8 +24,9 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
       m_settings(baseDir + QStringLiteral("/arcade.ini"), QSettings::IniFormat)
 {
     connect(m_pad, &Gamepad::menuAction, this, &AppController::menuAction);
-    connect(m_pad, &Gamepad::exitGameRequested, this, &AppController::stopGame);
+    connect(m_pad, &Gamepad::exitGameRequested, this, &AppController::requestExit);
     connect(m_core, &LibretroCore::gameStopped, this, [this] {
+        if (m_confirmExit) { m_confirmExit = false; emit confirmingExitChanged(); }
         m_pad->setMode(Gamepad::MenuMode);
         emit gameRunningChanged();
     });
@@ -55,7 +56,31 @@ QString AppController::cabinetName() const
 
 bool AppController::gameRunning() const { return m_core->isRunning(); }
 bool AppController::paused() const { return m_core->isPaused(); }
-void AppController::togglePause() { m_core->setPaused(!m_core->isPaused()); }
+void AppController::togglePause()
+{
+    if (!m_confirmExit) m_core->setPaused(!m_core->isPaused());
+}
+
+void AppController::requestExit()
+{
+    if (!m_core->isRunning() || m_confirmExit) return;
+    m_confirmExit = true;
+    m_pausedBeforeConfirm = m_core->isPaused();
+    m_core->setPaused(true);
+    m_pad->setMode(Gamepad::MenuMode); // el aviso se maneja como un menú (mando y teclado)
+    emit confirmingExitChanged();
+}
+
+void AppController::answerExit(bool leave)
+{
+    if (!m_confirmExit) return;
+    if (leave) { stopGame(); return; } // gameStopped limpia el aviso
+    m_confirmExit = false;
+    m_pad->setMode(Gamepad::GameMode);
+    if (!m_pausedBeforeConfirm) m_core->setPaused(false);
+    m_pad->setPaused(m_core->isPaused());
+    emit confirmingExitChanged();
+}
 
 bool AppController::scanlines() const { return m_settings.value(QStringLiteral("video/scanlines"), true).toBool(); }
 void AppController::setScanlines(bool v) { m_settings.setValue(QStringLiteral("video/scanlines"), v); emit settingsChanged(); }
@@ -115,7 +140,7 @@ void AppController::launch(int row)
 
     m_title = g.value(QStringLiteral("title")).toString();
     m_rom = g.value(QStringLiteral("rom")).toString();
-    setLastIndex(row);
+    setLastIndex(m_games->sourceRow(row)); // posición en la lista completa, no en la filtrada
 
     if (!m_core->loadGame(g.value(QStringLiteral("path")).toString())) {
         emit error(m_core->lastError());

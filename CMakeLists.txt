@@ -22,7 +22,7 @@ qt_add_qml_module(Arcade
     URI ArcadeUI
     VERSION 1.0
     QML_FILES qml/Main.qml
-    RESOURCES resources/names.txt
+    RESOURCES resources/names.txt resources/fbneo.txt
     NO_RESOURCE_TARGET_PATH
 )
 

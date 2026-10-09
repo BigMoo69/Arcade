@@ -30,6 +30,7 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
     connect(m_pad, &Gamepad::exitGameRequested, this, &AppController::requestExit);
     m_core->setVolume(volume() / 100.0);
     m_games->setHideBroken(hideBroken());
+    m_games->setHideClones(hideClones());
     connect(m_core, &LibretroCore::gameStopped, this, [this] {
         // Cuenta como partida si duró al menos 10 s (las pruebas de carga no cuentan)
         if (m_playClock.isValid() && m_playClock.elapsed() >= 10000)
@@ -123,6 +124,13 @@ void AppController::setHideBroken(bool v)
 {
     m_settings.setValue(QStringLiteral("ui/hideBroken"), v);
     m_games->setHideBroken(v);
+    emit settingsChanged();
+}
+bool AppController::hideClones() const { return m_settings.value(QStringLiteral("ui/hideClones"), false).toBool(); }
+void AppController::setHideClones(bool v)
+{
+    m_settings.setValue(QStringLiteral("ui/hideClones"), v);
+    m_games->setHideClones(v);
     emit settingsChanged();
 }
 bool AppController::fastForward() const { return m_core->fastForward(); }

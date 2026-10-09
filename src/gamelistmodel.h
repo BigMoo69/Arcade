@@ -16,6 +16,7 @@ class GameListModel : public QAbstractListModel
     Q_PROPERTY(QString system READ system WRITE setSystem NOTIFY filterChanged) // "" = todos
     Q_PROPERTY(QString search READ search WRITE setSearch NOTIFY filterChanged)
     Q_PROPERTY(bool hideBroken READ hideBroken WRITE setHideBroken NOTIFY filterChanged) // oculta los marcados con ✘
+    Q_PROPERTY(bool hideClones READ hideClones WRITE setHideClones NOTIFY filterChanged)
 public:
     enum Roles {
         RomRole = Qt::UserRole + 1,
@@ -26,7 +27,8 @@ public:
         CoreRole,   // archivo del núcleo libretro que lo corre ("" = FinalBurn Neo)
         FavoriteRole,
         PlaysRole,    // veces jugado
-        PlayTimeRole  // segundos jugados en total
+        PlayTimeRole, // segundos jugados en total
+        PlayersRole   // 3, 4… si es una versión para varios jugadores; 0 si el título no lo dice
     };
 
     explicit GameListModel(QObject *parent = nullptr);
@@ -47,6 +49,10 @@ public:
     void setSearch(const QString &s);
     bool hideBroken() const { return m_hideBroken; }
     void setHideBroken(bool v);
+    // Deja una sola versión de cada juego (la original si funciona; si no, un clon que funcione).
+    // No se aplica en favoritos ni recientes.
+    bool hideClones() const { return m_hideClones; }
+    void setHideClones(bool v);
     // Listas especiales que se recorren junto con los sistemas (LT/RT)
     static QString favoritesName() { return QStringLiteral("★ FAVORITOS"); }
     static QString recentsName() { return QStringLiteral("RECIENTES"); }
@@ -72,8 +78,10 @@ signals:
     void filterChanged();
 
 private:
-    struct Meta { QString title, year, maker, system; };
-    struct Game { QString rom, title, year, maker, path, system, key, core; }; // key = texto en minúsculas para buscar
+    struct Meta { QString title, year, maker, system, parent; int players = 0; }; // players: solo si el título dice "N Players"
+    // key = texto en minúsculas para buscar; parent = juego original si este es un clon
+    struct Game { QString rom, title, year, maker, path, system, key, core, parent; int players = 0; bool duplicate = false; };
+    void markDuplicates();
     // Sistema extra definido en cores/sistemas.ini: sus ROMs van en roms/<folder>/ y los corre otro núcleo
     struct SystemDef { QString id, name, core, folder; QStringList exts; };
     void loadSystemDefs();
@@ -98,7 +106,7 @@ private:
     struct Stat { int plays = 0; qint64 secs = 0; qint64 last = 0; };
     QHash<QString, Stat> m_stats;
     QSet<QString> m_favs;
-    bool m_hideBroken = false;
+    bool m_hideBroken = false, m_hideClones = false;
     void loadUserLists();
     void refilter();
 };

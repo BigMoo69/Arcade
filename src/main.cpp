@@ -169,6 +169,12 @@ int main(int argc, char *argv[])
                         press(c == u' ' ? Qt::Key_Space : c.isLetter() ? Qt::Key_A + (c.toUpper().unicode() - 'A')
                                                                         : Qt::Key_0 + (c.unicode() - '0'), QString(c));
                 }
+            } else if (step.startsWith(QLatin1String("hold:")) || step.startsWith(QLatin1String("release:"))) {
+                // "hold:6" deja pulsada esa tecla y "release:6" la suelta (para probar el teclado dentro del juego)
+                const QChar c = step.section(u':', 1).at(0);
+                const int key = c.isLetter() ? Qt::Key_A + (c.toUpper().unicode() - 'A') : Qt::Key_0 + (c.unicode() - '0');
+                QKeyEvent ev(step.startsWith(u'h') ? QEvent::KeyPress : QEvent::KeyRelease, key, Qt::NoModifier, QString(c));
+                QCoreApplication::sendEvent(win, &ev);
             } else if (step.startsWith(QLatin1String("click:")) || step.startsWith(QLatin1String("dclick:"))) {
                 // "click:x;y" en fracción de la ventana (0..1), para no depender del tamaño
                 const QStringList xy = step.section(u':', 1).split(u';');

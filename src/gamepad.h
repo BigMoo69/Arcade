@@ -1,6 +1,6 @@
 #pragma once
 // Entrada unificada: mandos (Xbox, PlayStation, genéricos vía SDL2 GameController)
-// y teclado como jugador 1.
+// y teclado como jugador 1 y jugador 2.
 
 #include <QObject>
 #include <QTimer>
@@ -26,7 +26,11 @@ public:
     // El mapeo solo afecta al juego: el menú siempre usa los botones por defecto.
     enum Phys { PhysA, PhysB, PhysX, PhysY, PhysLB, PhysRB, PhysLT, PhysRT, PhysL3, PhysR3,
                 PhysBack, PhysStart, PhysCount };
-    enum Action { ActA, ActB, ActC, ActD, ActL, ActR, ActL2, ActR2, ActCoin, ActStart, ActPause, ActionCount };
+    // Las acciones extra van sin botón hasta que el usuario les asigne uno: turbo (disparo automático
+    // mientras se mantiene pulsado) y macros (un botón que pulsa varios a la vez).
+    enum Action { ActA, ActB, ActC, ActD, ActL, ActR, ActL2, ActR2, ActCoin, ActStart, ActPause,
+                  ActTurboA, ActTurboB, ActTurboC, ActTurboD, ActMacroAB, ActMacroCD, ActMacroABC,
+                  ActionCount };
 
     Q_INVOKABLE int actionCount() const { return ActionCount; }
     Q_INVOKABLE QString actionName(int action) const;
@@ -86,7 +90,8 @@ private:
         bool pause = false;         // clic del stick derecho
     };
     std::array<Pad, MaxPlayers> m_pads{};
-    uint16_t m_keyboard = 0;        // bitmask del teclado (jugador 1)
+    std::array<uint16_t, 2> m_keyboard{}; // bitmask del teclado: jugador 1 y jugador 2
+    unsigned m_frame = 0;           // cuadros de juego leídos: marca el ritmo del turbo
 
     Mode m_mode = MenuMode;
     bool m_sdlOk = false;

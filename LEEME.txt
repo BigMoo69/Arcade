@@ -16,23 +16,36 @@ CONTROLES EN EL MENÚ
                        Mando Xbox      Mando PlayStation   Teclado
   Moverse              Cruceta/stick   Cruceta/stick       Flechas
   Saltar 10 juegos     Izq / Der       Izq / Der           Izq / Der
-  Saltar por letra     LB / RB         L1 / R1             Q / W  (RePág/AvPág)
-  Jugar                A               X (cruz)            Enter / Z
-  Opciones / Salir     B               O (círculo)         Esc / X
+  Saltar por letra     LB / RB         L1 / R1             RePág / AvPág
+  Jugar                A               X (cruz)            Enter
+  Opciones / Salir     B               O (círculo)         Esc
+  Buscar               X               □ (cuadrado)        Escribir directamente
+  Favorito             Y               △ (triángulo)       F2 / Insert
+  Cambiar de lista     LT / RT         L2 / R2             Tab / Mayús+Tab
   Pantalla completa                                        F11
+  (listas: todos, favoritos, recientes y cada sistema; también se maneja con el mouse)
 
 CONTROLES EN EL JUEGO
-                       Mando Xbox      Mando PlayStation   Teclado
-  Moneda (Coin)        View/Back       Share/Create        5 / Espacio
-  Start                Menu/Start      Options             1 / Enter
-  Botones A B C D      A  B  X  Y      X  O  □  △          Z  X  A  S
+                       Mando Xbox      Mando PlayStation   Teclado J1     Teclado J2
+  Moverse              Cruceta/stick   Cruceta/stick       Flechas        I  J  K  L
+  Moneda (Coin)        View/Back       Share/Create        5 / Espacio    6
+  Start                Menu/Start      Options             1 / Enter      2
+  Botones A B C D      A  B  X  Y      X  O  □  △          Z  X  A  S     G  H  T  Y
+  Pausa (menú)         Clic stick derecho (R3)             P
   Volver al menú       View+Menu o botón Xbox/PS           Esc
   Reiniciar                                                F1
-  Scanlines on/off                                         F2
-  Filtro suave on/off                                      F3
-  Guardar / cargar partida                                 F5 / F7
+  Scanlines / filtro suave                                 F2 / F3
+  Avance rápido                                            F4
+  Guardar / cargar (ranura 1)                              F5 / F7
+  Imagen (original, píxeles exactos, estirada)             F8
+  Volumen - / +                                            F9 / F10
+  Captura de pantalla                                      F12
 
   Hasta 4 mandos a la vez (jugador 1 a 4 en el orden en que se conectan).
+  El menú de pausa tiene 6 ranuras de guardado, volumen, avance rápido, captura
+  y las opciones del emulador (dificultad, región, etc.).
+  En OPCIONES > CONFIGURAR CONTROLES puedes cambiar los botones del mando y asignar
+  TURBO (disparo automático al mantener) y MACROS (A+B, C+D, A+B+C con un solo botón).
 
 PREVIEWS (opcional)
   media\videos\<rom>.mp4     video que se reproduce al elegir el juego

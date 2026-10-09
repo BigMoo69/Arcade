@@ -23,6 +23,7 @@ class AppController : public QObject
     Q_PROPERTY(int volume READ volume WRITE setVolume NOTIFY settingsChanged)         // 0..100
     Q_PROPERTY(int aspectMode READ aspectMode WRITE setAspectMode NOTIFY settingsChanged) // ver EmulatorView
     Q_PROPERTY(bool hideBroken READ hideBroken WRITE setHideBroken NOTIFY settingsChanged)
+    Q_PROPERTY(bool hideClones READ hideClones WRITE setHideClones NOTIFY settingsChanged)
     Q_PROPERTY(bool fastForward READ fastForward WRITE setFastForward NOTIFY fastForwardChanged)
     Q_PROPERTY(int stateRev READ stateRev NOTIFY statesChanged)     // cambia al guardar una partida
     Q_PROPERTY(int optionsRev READ optionsRev NOTIFY coreOptionsChanged)
@@ -47,6 +48,7 @@ public:
     int volume() const;      void setVolume(int v);
     int aspectMode() const;  void setAspectMode(int v);
     bool hideBroken() const; void setHideBroken(bool v);
+    bool hideClones() const; void setHideClones(bool v);
     bool fastForward() const; void setFastForward(bool v);
     int stateRev() const { return m_stateRev; }
     int optionsRev() const { return m_optionsRev; }

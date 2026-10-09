@@ -526,7 +526,8 @@ Window {
                 }
                 Text {
                     width: parent.width
-                    text: [win.game.year, win.game.maker].filter(function (s) { return s }).join("  ·  ")
+                    text: [win.game.year, win.game.maker, win.game.players > 0 ? win.game.players + " JUGADORES" : ""]
+                          .filter(function (s) { return s }).join("  ·  ")
                     font.family: arcadeFont; font.pixelSize: 18 * u
                     color: win.cDim; horizontalAlignment: Text.AlignHCenter
                 }
@@ -977,6 +978,7 @@ Window {
             { label: "◄ IMAGEN DEL JUEGO: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 }, side: function (d) { App.aspectMode = App.aspectMode + d } },
             { label: "◄ VOLUMEN: " + App.volume + " % ►", act: function () { App.volume = App.volume >= 100 ? 0 : App.volume + 10 }, side: function (d) { App.volume = App.volume + d * 10 } },
             { label: "OCULTAR JUEGOS CON ✘: " + (App.hideBroken ? "SÍ" : "NO"), act: function () { win.refilter(function () { App.hideBroken = !App.hideBroken }) } },
+            { label: "OCULTAR VERSIONES REPETIDAS: " + (App.hideClones ? "SÍ" : "NO"), act: function () { win.refilter(function () { App.hideClones = !App.hideClones }) } },
             { label: "CONFIGURAR CONTROLES", act: function () { remap.index = 0; win.remapOpen = true } },
             { label: "RECARGAR JUEGOS, TEMAS Y FONDOS", act: function () { Games.rescan(); Theme.reload(); win.current = 0; win.optionsOpen = false } },
             { label: "SALIR", act: function () { App.quit() } }
@@ -1065,14 +1067,20 @@ Window {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: Pad.connectedCount > 0 ? "ELIGE UNA ACCIÓN Y PULSA EL BOTÓN QUE QUIERAS" : "CONECTA UN MANDO PARA CONFIGURARLO"
                     color: win.cDim; font.family: arcadeFont; font.pixelSize: 15 * u
-                    bottomPadding: 8 * u
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "TURBO = DISPARO AUTOMÁTICO AL MANTENER · MACRO = VARIOS BOTONES A LA VEZ\nTECLADO  J1: FLECHAS  Z X A S  1  5      J2: I J K L  G H T Y  2  6"
+                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 13 * u
+                    bottomPadding: 6 * u
                 }
                 Repeater {
                     model: remap.rows
                     Rectangle {
                         readonly property bool sel: index === remap.index
                         readonly property bool waiting: sel && Pad.capturing
-                        width: 580 * u; height: 34 * u; radius: 4 * u
+                        width: 580 * u; height: 27 * u; radius: 4 * u
                         color: sel ? win.cAccent : "transparent"
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
@@ -1080,21 +1088,21 @@ Window {
                             visible: index < remap.actions
                             text: Pad.actionName(index)
                             color: sel ? win.cOnAccent : win.cText
-                            font.family: arcadeFont; font.pixelSize: 19 * u; font.bold: true
+                            font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
                         }
                         Text {
                             anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 16 * u }
                             visible: index < remap.actions
                             text: waiting ? "PULSA UN BOTÓN…" : (Pad.mapRevision, Pad.bindingName(index))
                             color: sel ? (waiting ? "#900000" : "black") : win.cAccent
-                            font.family: arcadeFont; font.pixelSize: 19 * u; font.bold: true
+                            font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
                         }
                         Text {
                             anchors.centerIn: parent
                             visible: index >= remap.actions
                             text: index === remap.actions ? "RESTABLECER" : "VOLVER"
                             color: sel ? win.cOnAccent : win.cText
-                            font.family: arcadeFont; font.pixelSize: 19 * u; font.bold: true
+                            font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
                         }
                         MouseArea { anchors.fill: parent; onClicked: if (!Pad.capturing) { remap.index = index; remap.handle("accept") } }
                     }

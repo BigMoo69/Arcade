@@ -94,6 +94,11 @@ El usuario habla español; responde en español, conciso y directo.
   3.680 ✔ / 186 ✘**, `dist/` ≈ 10,8 GB. Ningún CPS-2, CPS-3 ni PGM de ese paquete pasó (sets demasiado
   viejos). De los 14 NeoGeo pendientes entraron 9; siguen mal `fightfev`, `gururin`, `janshin`, `neomrdo`,
   `pnyaa`. No se extrajeron el exe, los CHD ni los 3.914 ROMs que FBNeo no conoce. ~2.060 juegos sin imagen.
+- **Capturas de libretro-thumbnails (2026-10-09):** se bajaron 2.050 PNG (171 MB) del repositorio
+  `libretro-thumbnails/FBNeo_-_Arcade_Games` (carpeta `Named_Snaps`; el archivo se llama como el título
+  de `resources/fbneo.txt` cambiando ``&*/:`<>?\|"`` por `_`; los clones son enlaces simbólicos) a
+  `dist/media/snaps/<rom>.png`, sin sobrescribir nada. Solo quedan 14 zips sin imagen (`apb1`–`apb6`,
+  `apbf`, `apbg`, `blasterkit`, `bnstars1`, `rf2`, `robotronyo`, `spbactnj` y el BIOS `skns`).
 - **NeoRAGEx 5.2a** (`Desktop\NeoRAGEx 5.2a`, de donde salieron ROMs y capturas): ignora el parámetro de
   línea de comandos (abre su menú) y cambia la pantalla a 640×480, así que no sirve como emulador de
   respaldo lanzado desde el Arcade. Es de código cerrado; no se puede fusionar con FBNeo.
@@ -164,8 +169,23 @@ El usuario habla español; responde en español, conciso y directo.
     el núcleo declara por `SET_VARIABLES` y cada cambio se guarda en `cores/<núcleo>.ini`.
   - *Teclas en juego:* F4 avance rápido, F5/F7 ranura 1, F8 imagen, F9/F10 volumen, F12 captura.
   - Ojo en QML: no llamar `list` a una propiedad (choca con el id de la lista de juegos).
-  - **Pendiente de la lista de RetroArch:** shader CRT, rebobinar, trucos, mapeo por jugador/juego, turbo
-    y macros, teclado para J2, marcos (bezels), run-ahead, descarga de miniaturas, ocultar clones.
+  - *Ocultar versiones repetidas:* Opciones (`ui/hideClones`, apagada por defecto). `resources/fbneo.txt`
+    lleva un 6.º campo con el juego original de cada clon (`cloneof` del DAT; 5.806 clones);
+    `GameListModel::markDuplicates()` deja una versión por familia: mejor estado (✔ > sin probar > ✘) y,
+    a igualdad, la original. No se aplica en favoritos ni recientes. Las versiones cuyo título de FBNeo
+    dice "3/4/6 Players" (`Meta::players`, rol `players`) son familia aparte: queda una de 4 jugadores
+    además de la normal, y el preview pone "4 JUGADORES". Con los ROMs del usuario: 3.865 → 1.932.
+  - *Turbo, macros y teclado J2 (2026-10-09):* `Gamepad::Action` tiene 7 acciones más, sin botón por
+    defecto, que se asignan en CONFIGURAR CONTROLES: TURBO A–D (solo cuenta en la fase activa de
+    `m_frame / 3`, ~10 disparos/s) y MACRO A+B, C+D, A+B+C (`kActionMask` con varios bits). `input/map`
+    guardado con 11 valores sigue valiendo (las nuevas quedan en -1). Teclado J2: I/J/K/L, G H T Y,
+    2 start, 6 moneda (`m_keyboard[2]`). J2 probado con `hold:`/`release:` (pasos nuevos de
+    `--test-actions`); **turbo y macros sin probar: hace falta un mando real**.
+  - **Pendiente de la lista de RetroArch:** shader CRT, rebobinar, trucos, mapeo por jugador/juego,
+    marcos (bezels), run-ahead.
+  - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`
+    y `roms/favoritos.txt` (no borrarlos: el usuario usa el Arcade entre prueba y prueba), o usar una
+    base aparte con `ARCADE_DIR`.
 - **Aviso al salir del juego:** Select+Start / Guide / Esc llaman a `AppController::requestExit()`, que
   congela el juego, pone el mando en modo menú y muestra "¿SALIR DEL JUEGO?" (`exitDlg` en `Main.qml`)
   con "NO" marcado por defecto; `answerExit(bool)` sale o reanuda (respeta si ya estaba en pausa).

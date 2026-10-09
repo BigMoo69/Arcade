@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QDateTime>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QSet>
 #include <QTextStream>
 #include <QUrl>
@@ -26,7 +27,7 @@ static const QSet<QString> &biosSet()
 
 GameListModel::GameListModel(QObject *parent) : QAbstractListModel(parent) {}
 
-// Formato: zip|Título|Año|Fabricante|Sistema. Con overwrite=false solo rellena lo que falte
+// Formato: zip|Título|Año|Fabricante|Sistema|Original. Con overwrite=false solo rellena lo que falte
 // (así los títulos cortos de names.txt mandan y fbneo.txt aporta el sistema y el resto).
 void GameListModel::loadNamesFile(const QString &file, bool overwrite)
 {
@@ -47,6 +48,12 @@ void GameListModel::loadNamesFile(const QString &file, bool overwrite)
         put(m.year, p.value(2).trimmed());
         put(m.maker, p.value(3).trimmed());
         put(m.system, p.value(4).trimmed());
+        put(m.parent, p.value(5).trimmed().toLower());
+        // "(4 Players ver EAC)": se anota aunque names.txt le ponga luego un título corto
+        static const QRegularExpression playersRe(QStringLiteral("(\\d)[ -]?players?\\b"),
+                                                  QRegularExpression::CaseInsensitiveOption);
+        const auto pm = playersRe.match(p.value(1));
+        if (pm.hasMatch()) m.players = qMax(m.players, pm.captured(1).toInt());
     }
 }
 
@@ -217,6 +224,38 @@ void GameListModel::setHideBroken(bool v)
     refilter();
 }
 
+void GameListModel::setHideClones(bool v)
+{
+    if (v == m_hideClones) return;
+    m_hideClones = v;
+    markDuplicates(); // con el estado ✔/✘ de este momento
+    refilter();
+}
+
+// De cada familia (original + clones) se queda una versión: la mejor por estado (✔, sin probar, ✘)
+// y, a igualdad, la original antes que un clon. Las demás quedan marcadas como repetidas.
+// Las versiones para 3 o más jugadores ("4 Players") forman su propia familia: se conserva una
+// de ellas además de la versión normal, para no perder el modo de 4 jugadores.
+void GameListModel::markDuplicates()
+{
+    auto familyOf = [](const Game &g) {
+        return g.core + u'|' + (g.parent.isEmpty() ? g.rom : g.parent)
+               + (g.players >= 3 ? u'|' + QString::number(g.players) : QString());
+    };
+    QHash<QString, int> best; // familia -> índice elegido
+    auto rank = [this](const Game &g) { return m_status.value(g.rom, 0) * 2 + (g.parent.isEmpty() ? 1 : 0); };
+    for (int i = 0; i < m_all.size(); ++i) {
+        const Game &g = m_all.at(i);
+        const QString family = familyOf(g);
+        const auto it = best.constFind(family);
+        if (it == best.cend() || rank(g) > rank(m_all.at(*it))) best.insert(family, i);
+    }
+    for (int i = 0; i < m_all.size(); ++i) {
+        Game &g = m_all[i];
+        g.duplicate = best.value(familyOf(g)) != i;
+    }
+}
+
 void GameListModel::loadUserLists()
 {
     m_favs.clear();
@@ -308,6 +347,7 @@ void GameListModel::applyFilter()
         else if (recents) { if (m_stats.value(g.rom).last == 0) continue; }
         else if (!m_system.isEmpty() && g.system != m_system) continue;
         if (m_hideBroken && m_status.value(g.rom, 0) < 0) continue;
+        if (m_hideClones && g.duplicate && !favs && !recents) continue;
         bool ok = true;
         for (const QString &w : words)
             if (!g.key.contains(w)) { ok = false; break; }
@@ -362,7 +402,7 @@ void GameListModel::rescan()
             g.title = fi.completeBaseName().toUpper();
         }
         // Sistema: el del set; si es un hack con sufijo ("kof2002-5a"), el de su juego base
-        if (it != m_meta.cend()) g.system = it->system;
+        if (it != m_meta.cend()) { g.system = it->system; g.parent = it->parent; g.players = it->players; }
         if (g.system.isEmpty() && rom.contains(u'-'))
             g.system = m_meta.value(rom.section(u'-', 0, 0)).system;
         if (g.system.isEmpty()) g.system = QStringLiteral("OTROS");
@@ -408,6 +448,7 @@ void GameListModel::rescan()
     m_systems.prepend(recentsName());
     m_systems.prepend(favoritesName());
     if (!m_systems.contains(m_system)) m_system.clear();
+    markDuplicates();
     applyFilter();
 
     endResetModel();
@@ -449,6 +490,7 @@ QVariant GameListModel::data(const QModelIndex &index, int role) const
     case FavoriteRole: return m_favs.contains(g.rom);
     case PlaysRole:    return m_stats.value(g.rom).plays;
     case PlayTimeRole: return m_stats.value(g.rom).secs;
+    case PlayersRole:  return g.players >= 3 ? g.players : 0;
     case VideoRole:
         return mediaFile(g.rom, { QStringLiteral("videos/"), QString() },
                          { QStringLiteral(".mp4"), QStringLiteral(".webm"), QStringLiteral(".avi"), QStringLiteral(".mkv") });
@@ -468,7 +510,7 @@ QHash<int, QByteArray> GameListModel::roleNames() const
         { RomRole, "rom" }, { TitleRole, "title" }, { YearRole, "year" },
         { MakerRole, "maker" }, { PathRole, "path" }, { VideoRole, "video" },
         { ImageRole, "image" }, { MarqueeRole, "marquee" }, { StatusRole, "status" }, { SystemRole, "system" }, { CoreRole, "core" },
-        { FavoriteRole, "favorite" }, { PlaysRole, "plays" }, { PlayTimeRole, "playTime" },
+        { FavoriteRole, "favorite" }, { PlaysRole, "plays" }, { PlayTimeRole, "playTime" }, { PlayersRole, "players" },
     };
 }
 

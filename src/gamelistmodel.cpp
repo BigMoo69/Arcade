@@ -419,8 +419,20 @@ void GameListModel::rescan()
         if (!dir.exists()) continue;
         QStringList filters;
         for (const QString &e : d.exts) filters << QStringLiteral("*.") + e;
+        // soporte.txt (un nombre por línea): archivos que el emulador necesita pero no son juegos que
+        // listar, como el zip "padre" de un clon de MAME cuando el padre ya se juega con otro núcleo
+        QSet<QString> support;
+        QFile sup(dir.filePath(QStringLiteral("soporte.txt")));
+        if (sup.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&sup);
+            while (!in.atEnd()) {
+                const QString n = in.readLine().trimmed().toLower();
+                if (!n.isEmpty() && !n.startsWith(u'#')) support.insert(n);
+            }
+        }
         for (const QFileInfo &fi : dir.entryInfoList(filters, QDir::Files, QDir::Name)) {
             if (biosSet().contains(fi.completeBaseName().toLower())) continue; // BIOS de MAME, etc.
+            if (support.contains(fi.completeBaseName().toLower())) continue;
             Game g;
             g.rom = d.folder.toLower() + u'/' + fi.completeBaseName().toLower();
             g.path = fi.absoluteFilePath();
@@ -431,6 +443,8 @@ void GameListModel::rescan()
             if (it != m_meta.cend()) {
                 if (!it->title.isEmpty()) g.title = it->title;
                 g.year = it->year; g.maker = it->maker;
+                g.parent = it->parent; // 6.º campo: "mame/padre" si es un clon (para ocultar repetidos)
+                g.players = it->players;
             }
             g.key = (g.title + u' ' + fi.completeBaseName()).toLower();
             m_all.push_back(g);

@@ -99,6 +99,19 @@ El usuario habla español; responde en español, conciso y directo.
   de `resources/fbneo.txt` cambiando ``&*/:`<>?\|"`` por `_`; los clones son enlaces simbólicos) a
   `dist/media/snaps/<rom>.png`, sin sobrescribir nada. Solo quedan 14 zips sin imagen (`apb1`–`apb6`,
   `apbf`, `apbg`, `blasterkit`, `bnstars1`, `rf2`, `robotronyo`, `spbactnj` y el BIOS `skns`).
+- **ROMs de MAME del paquete tuarcade (2026-10-09):** se extrajeron los 3.914 zips que FBNeo no conoce a
+  `dist/_mame_nuevos/` y se verificaron con MAME 2003-Plus (`--check-rom mame/<rom>` con
+  `ARCADE_LOG_ALL=1`, 8 en paralelo, 12 min) junto con los 186 que FBNeo marca ✘: 2.851 no existen en
+  MAME 0.78 ("Matched game driver" ausente), 166 fallan, 6 tumban el núcleo, 24 cargan con avisos
+  "WRONG CHECKSUM/LENGTH" y **1.053 pasan limpios** (940 nuevos + 113 de los ✘ de FBNeo). Esos 1.053
+  están en `dist/roms/mame/` (2,2 GB) con `mame/<rom>|ok` en `estado.txt` y 684 capturas en
+  `media/snaps/mame/`. Los "padres" que necesitan los clones salen del propio log (`gamename:<padre>`):
+  89 zips de soporte, 60 de ellos enlaces duros a zips de `dist/roms/`; se listan en
+  `roms/mame/soporte.txt`, que `GameListModel` usa para no mostrarlos como juegos (vale para cualquier
+  carpeta de sistema). Total en la lista: 4.918. Títulos, año y fabricante: de `metadata/mame2003-plus.xml` (libretro/mame2003-plus-libretro, 22 MB)
+  a `dist/roms/names.txt` como `mame/<rom>|Título|Año|Fabricante||mame/<padre>` (el 6.º campo, 255
+  clones, hace que "ocultar versiones repetidas" también los agrupe). En `dist/_mame_nuevos/` quedan 2.945 zips sin instalar (12,4 GB).
+  `--check-rom` ya no llama a `get()` por fila (tardaba ~30 s con miles de juegos; ahora 0,5 s).
 - **NeoRAGEx 5.2a** (`Desktop\NeoRAGEx 5.2a`, de donde salieron ROMs y capturas): ignora el parámetro de
   línea de comandos (abre su menú) y cambia la pantalla a 640×480, así que no sirve como emulador de
   respaldo lanzado desde el Arcade. Es de código cerrado; no se puede fusionar con FBNeo.

@@ -79,11 +79,11 @@ int main(int argc, char *argv[])
         bool failed = false;
         QObject::connect(&controller, &AppController::error, &app, [&failed](const QString &) { failed = true; });
         for (int row = 0; row < games.rowCount(); ++row) {
-            if (games.get(row).value(QStringLiteral("rom")).toString().toLower() != only) continue;
+            if (games.data(games.index(row), GameListModel::RomRole).toString().toLower() != only) continue;
             failed = false;
             controller.launch(row);
             qWarning().noquote() << (failed ? "[check] FALLA" : "[check] OK")
-                                 << games.get(row).value(QStringLiteral("rom")).toString();
+                                 << games.data(games.index(row), GameListModel::RomRole).toString();
             controller.stopGame();
         }
         controller.setLastIndex(last);
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
             } else if (step.startsWith(QLatin1String("launch:"))) {
                 const QString rom = step.mid(7).toLower();
                 for (int row = 0; row < games.rowCount(); ++row)
-                    if (games.get(row).value(QStringLiteral("rom")).toString() == rom) { controller.launch(row); break; }
+                    if (games.data(games.index(row), GameListModel::RomRole).toString() == rom) { controller.launch(row); break; }
             } else if (step == QLatin1String("toggle-pause")) {
                 controller.togglePause();
             } else if (step == QLatin1String("wait")) {
@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
                          [](const QString &msg) { qWarning().noquote() << "[error]" << msg; });
         QTimer::singleShot(500, &app, [&, rom] {
             for (int row = 0; row < games.rowCount(); ++row) {
-                if (games.get(row).value(QStringLiteral("rom")).toString().toLower() == rom) {
+                if (games.data(games.index(row), GameListModel::RomRole).toString().toLower() == rom) {
                     controller.launch(row);
                     return;
                 }

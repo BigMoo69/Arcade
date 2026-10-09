@@ -127,7 +127,7 @@ Window {
     // ---------------- Sonidos y música del menú ----------------
     // Los .wav están en la carpeta sounds/ (se crean unos sencillos si faltan; puedes cambiarlos).
     // La música es opcional: sounds/musica.mp3 (u .ogg/.wav) suena en el menú y calla al jugar.
-    SoundEffect { id: sfxMove; source: App.soundUrl("mover"); volume: App.volume / 100 * 0.5 }
+    SoundEffect { id: sfxMove; source: App.soundUrl("mover"); volume: App.volume / 100 * 0.4 }
     SoundEffect { id: sfxAccept; source: App.soundUrl("aceptar"); volume: App.volume / 100 * 0.5 }
     SoundEffect { id: sfxBack; source: App.soundUrl("volver"); volume: App.volume / 100 * 0.5 }
     function sfx(a) {

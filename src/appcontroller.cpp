@@ -26,7 +26,9 @@ static const char *kCoreFile = "fbneo_libretro.so";
 
 // Escribe un .wav corto (22 kHz, mono, 16 bits) con una serie de notas de onda cuadrada que se
 // apagan: los "blips" del menú. Solo se crean si faltan, así el usuario puede poner los suyos.
-static void writeBlip(const QString &file, std::initializer_list<std::pair<double, int>> notes)
+// Con soft=true la onda es senoidal, más baja de volumen y con entrada y salida graduales: un toque
+// discreto para lo que suena a cada rato (moverse por la lista).
+static void writeBlip(const QString &file, std::initializer_list<std::pair<double, int>> notes, bool soft = false)
 {
     if (QFileInfo::exists(file)) return;
     const int rate = 22050;
@@ -38,7 +40,12 @@ static void writeBlip(const QString &file, std::initializer_list<std::pair<doubl
         for (int i = 0; i < n; ++i) {
             const double phase = std::fmod(i * freq / rate, 1.0);
             const double fade = 1.0 - double(i) / n;
-            s << qint16((phase < 0.5 ? 1 : -1) * 5000 * fade);
+            if (soft) {
+                const double attack = qMin(1.0, i / (rate * 0.006)); // 6 ms de entrada: sin chasquido
+                s << qint16(std::sin(phase * 6.283185307) * 1800 * attack * fade * fade);
+            } else {
+                s << qint16((phase < 0.5 ? 1 : -1) * 5000 * fade);
+            }
         }
     }
     QByteArray wav;
@@ -56,7 +63,11 @@ static void writeBlip(const QString &file, std::initializer_list<std::pair<doubl
 void AppController::ensureSounds() const
 {
     const QString dir = m_base + QStringLiteral("/sounds/");
-    writeBlip(dir + QStringLiteral("mover.wav"), { { 1320, 28 } });
+    // El primer mover.wav que se generaba (1.278 bytes, agudo y de onda cuadrada) resultó molesto:
+    // si sigue ahí se sustituye por el suave. Un archivo puesto por el usuario no se toca.
+    const QString move = dir + QStringLiteral("mover.wav");
+    if (QFileInfo(move).size() == 1278) QFile::remove(move);
+    writeBlip(move, { { 392, 55 } }, true);
     writeBlip(dir + QStringLiteral("aceptar.wav"), { { 660, 45 }, { 990, 45 }, { 1320, 70 } });
     writeBlip(dir + QStringLiteral("volver.wav"), { { 520, 45 }, { 390, 70 } });
 }

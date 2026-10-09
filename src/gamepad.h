@@ -30,19 +30,37 @@ public:
     // mientras se mantiene pulsado) y macros (un botón que pulsa varios a la vez).
     enum Action { ActA, ActB, ActC, ActD, ActL, ActR, ActL2, ActR2, ActCoin, ActStart, ActPause,
                   ActTurboA, ActTurboB, ActTurboC, ActTurboD, ActMacroAB, ActMacroCD, ActMacroABC,
+                  ActRewind, ActFast, // se mantienen pulsados: rebobinar y avance rápido
                   ActionCount };
+
+    // Teclas del teclado que se pueden asignar a cada jugador (1 y 2)
+    enum KeyAction { KeyUp, KeyDown, KeyLeft, KeyRight, KeyA, KeyB, KeyC, KeyD, KeyL, KeyR,
+                     KeyCoin, KeyStart, KeyActionCount };
 
     Q_INVOKABLE int actionCount() const { return ActionCount; }
     Q_INVOKABLE QString actionName(int action) const;
-    Q_INVOKABLE QString bindingName(int action) const;
+    Q_INVOKABLE QString bindingName(int action, int player = 0) const;
     // Espera el siguiente botón que se pulse y lo asigna a la acción (intercambia si ya estaba en uso)
-    Q_INVOKABLE void startCapture(int action);
+    Q_INVOKABLE void startCapture(int action, int player = 0);
     Q_INVOKABLE void cancelCapture();
-    Q_INVOKABLE void resetMapping();
-    bool capturing() const { return m_captureAction >= 0; }
+    Q_INVOKABLE void resetMapping(int player = 0);
+    bool capturing() const { return m_captureAction >= 0 || m_keyCaptureAction >= 0; }
     int mapRevision() const { return m_mapRevision; }
-    QList<int> mapping() const;
-    void setMapping(const QList<int> &map);
+    // Cada mando (jugador 0..3) tiene su propio mapeo
+    QList<int> mapping(int player = 0) const;
+    void setMapping(const QList<int> &map, int player = 0);
+    QList<int> keyMapping(int player) const;
+    void setKeyMapping(const QList<int> &keys, int player);
+
+    // Pantalla de controles: "dispositivos" 0..3 = mando de cada jugador, 4 y 5 = teclado J1 y J2.
+    // Cada uno tiene sus filas (acciones) con el botón o la tecla asignada.
+    Q_INVOKABLE int deviceCount() const { return MaxPlayers + 2; }
+    Q_INVOKABLE QString deviceName(int dev) const;
+    Q_INVOKABLE int rowCount(int dev) const { return dev < MaxPlayers ? int(ActionCount) : int(KeyActionCount); }
+    Q_INVOKABLE QString rowName(int dev, int row) const;
+    Q_INVOKABLE QString rowBinding(int dev, int row) const;
+    Q_INVOKABLE void captureRow(int dev, int row);
+    Q_INVOKABLE void resetDevice(int dev);
 
     explicit Gamepad(QObject *parent = nullptr);
     ~Gamepad() override;
@@ -55,6 +73,9 @@ public:
     // Llamado por el núcleo en cada cuadro
     void poll();
     bool retroButton(int port, unsigned retroId) const;
+    // Botones de "mantener pulsado" (mando, o tecla Retroceso para rebobinar)
+    bool rewindHeld() const;
+    bool fastHeld() const;
 
     int connectedCount() const;
     QString firstPadName() const;
@@ -88,10 +109,12 @@ private:
         uint16_t phys = 0;          // bitmask de Phys, sin mapear
         bool guide = false;
         bool pause = false;         // clic del stick derecho
+        bool rewind = false, fast = false;
     };
     std::array<Pad, MaxPlayers> m_pads{};
     std::array<uint16_t, 2> m_keyboard{}; // bitmask del teclado: jugador 1 y jugador 2
     unsigned m_frame = 0;           // cuadros de juego leídos: marca el ritmo del turbo
+    bool m_keyRewind = false;       // tecla Retroceso mantenida
 
     Mode m_mode = MenuMode;
     bool m_sdlOk = false;
@@ -105,10 +128,15 @@ private:
     bool m_exitLatch = false;
     bool m_pauseLatch = false;
 
-    // Remapeo: m_map[acción] = botón físico
-    std::array<int, ActionCount> m_map;
+    // Remapeo: m_maps[jugador][acción] = botón físico
+    std::array<std::array<int, ActionCount>, MaxPlayers> m_maps;
+    // Teclado: m_keys[jugador][KeyAction] = tecla Qt (0 = sin tecla)
+    std::array<std::array<int, KeyActionCount>, 2> m_keys;
     int m_mapRevision = 0;
     int m_captureAction = -1;
+    int m_capturePlayer = 0;
+    int m_keyCaptureAction = -1;    // esperando una tecla para m_keys[m_keyCapturePlayer][...]
+    int m_keyCapturePlayer = 0;
     bool m_captureArmed = false;    // espera a que se suelten todos los botones antes de capturar
     uint16_t m_capturePrev = 0;
     bool m_paused = false;

@@ -5,6 +5,7 @@
 #include <SDL.h>
 
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QGuiApplication>
 #include <QDebug>
 
@@ -25,12 +26,13 @@ static constexpr uint16_t kActionMask[Gamepad::ActionCount] = {
     1u << RETRO_DEVICE_ID_JOYPAD_SELECT, 1u << RETRO_DEVICE_ID_JOYPAD_START, 0,
     kBtnA, kBtnB, kBtnC, kBtnD,                      // turbo
     kBtnA | kBtnB, kBtnC | kBtnD, kBtnA | kBtnB | kBtnC, // macros
+    0, 0,                                            // rebobinar y avance rápido no llegan al núcleo
 };
 static constexpr std::array<int, Gamepad::ActionCount> kDefaultMap = {
     Gamepad::PhysA, Gamepad::PhysB, Gamepad::PhysX, Gamepad::PhysY,
     Gamepad::PhysLB, Gamepad::PhysRB, Gamepad::PhysLT, Gamepad::PhysRT,
     Gamepad::PhysBack, Gamepad::PhysStart, Gamepad::PhysR3,
-    -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1,
 };
 
 // turboOn: fase del disparo automático (los botones turbo solo cuentan cuando es true)
@@ -46,34 +48,123 @@ static uint16_t applyMap(uint16_t phys, const std::array<int, Gamepad::ActionCou
     return m;
 }
 
+// Teclas por defecto. RETRO de cada KeyAction en kKeyRetro.
+static constexpr std::array<std::array<int, Gamepad::KeyActionCount>, 2> kDefaultKeys = { {
+    { Qt::Key_Up, Qt::Key_Down, Qt::Key_Left, Qt::Key_Right, Qt::Key_Z, Qt::Key_X, Qt::Key_A, Qt::Key_S,
+      Qt::Key_Q, Qt::Key_W, Qt::Key_5, Qt::Key_1 },
+    { Qt::Key_I, Qt::Key_K, Qt::Key_J, Qt::Key_L, Qt::Key_G, Qt::Key_H, Qt::Key_T, Qt::Key_Y,
+      0, 0, Qt::Key_6, Qt::Key_2 },
+} };
+static constexpr unsigned kKeyRetro[Gamepad::KeyActionCount] = {
+    RETRO_DEVICE_ID_JOYPAD_UP, RETRO_DEVICE_ID_JOYPAD_DOWN, RETRO_DEVICE_ID_JOYPAD_LEFT, RETRO_DEVICE_ID_JOYPAD_RIGHT,
+    RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_Y, RETRO_DEVICE_ID_JOYPAD_X,
+    RETRO_DEVICE_ID_JOYPAD_L, RETRO_DEVICE_ID_JOYPAD_R, RETRO_DEVICE_ID_JOYPAD_SELECT, RETRO_DEVICE_ID_JOYPAD_START,
+};
+
+QString Gamepad::deviceName(int dev) const
+{
+    if (dev < MaxPlayers) return QStringLiteral("MANDO DEL JUGADOR %1").arg(dev + 1);
+    return QStringLiteral("TECLADO DEL JUGADOR %1").arg(dev - MaxPlayers + 1);
+}
+
+QString Gamepad::rowName(int dev, int row) const
+{
+    if (dev < MaxPlayers) return actionName(row);
+    static const char *names[KeyActionCount] = {
+        "ARRIBA", "ABAJO", "IZQUIERDA", "DERECHA", "BOTÓN A", "BOTÓN B", "BOTÓN C", "BOTÓN D",
+        "BOTÓN L", "BOTÓN R", "MONEDA", "START",
+    };
+    return row >= 0 && row < KeyActionCount ? QString::fromUtf8(names[row]) : QString();
+}
+
+QString Gamepad::rowBinding(int dev, int row) const
+{
+    if (dev < MaxPlayers) return bindingName(row, dev);
+    if (dev >= deviceCount() || row < 0 || row >= KeyActionCount) return {};
+    const int key = m_keys[size_t(dev - MaxPlayers)][size_t(row)];
+    switch (key) {
+    case 0:              return QStringLiteral("—");
+    case Qt::Key_Up:     return QStringLiteral("FLECHA ARRIBA");
+    case Qt::Key_Down:   return QStringLiteral("FLECHA ABAJO");
+    case Qt::Key_Left:   return QStringLiteral("FLECHA IZQUIERDA");
+    case Qt::Key_Right:  return QStringLiteral("FLECHA DERECHA");
+    case Qt::Key_Space:  return QStringLiteral("ESPACIO");
+    case Qt::Key_Return: return QStringLiteral("ENTER");
+    case Qt::Key_Enter:  return QStringLiteral("ENTER (NUM.)");
+    }
+    return QKeySequence(key).toString().toUpper();
+}
+
+void Gamepad::captureRow(int dev, int row)
+{
+    if (dev < MaxPlayers) { startCapture(row, dev); return; }
+    if (dev >= deviceCount() || row < 0 || row >= KeyActionCount) return;
+    m_captureAction = -1;
+    m_keyCapturePlayer = dev - MaxPlayers;
+    m_keyCaptureAction = row;
+    emit capturingChanged();
+}
+
+void Gamepad::resetDevice(int dev)
+{
+    if (dev < MaxPlayers) { resetMapping(dev); return; }
+    if (dev >= deviceCount()) return;
+    m_keys[size_t(dev - MaxPlayers)] = kDefaultKeys[size_t(dev - MaxPlayers)];
+    // Una tecla no puede quedar en los dos jugadores a la vez
+    auto &other = m_keys[size_t(1 - (dev - MaxPlayers))];
+    for (int &k : other)
+        for (int mine : m_keys[size_t(dev - MaxPlayers)])
+            if (k != 0 && k == mine) k = 0;
+    ++m_mapRevision;
+    emit mappingChanged();
+}
+
+QList<int> Gamepad::keyMapping(int player) const
+{
+    const auto &k = m_keys[size_t(qBound(0, player, 1))];
+    return QList<int>(k.begin(), k.end());
+}
+
+void Gamepad::setKeyMapping(const QList<int> &keys, int player)
+{
+    if (keys.size() != KeyActionCount || player < 0 || player > 1) return;
+    std::copy(keys.begin(), keys.end(), m_keys[size_t(player)].begin());
+    ++m_mapRevision;
+    emit mappingChanged();
+}
+
 QString Gamepad::actionName(int action) const
 {
     static const char *names[ActionCount] = {
         "BOTÓN A", "BOTÓN B", "BOTÓN C", "BOTÓN D", "BOTÓN L", "BOTÓN R", "BOTÓN L2", "BOTÓN R2",
         "MONEDA", "START", "PAUSA",
         "TURBO A", "TURBO B", "TURBO C", "TURBO D", "MACRO A+B", "MACRO C+D", "MACRO A+B+C",
+        "REBOBINAR (MANTENER)", "AVANCE RÁPIDO (MANTENER)",
     };
     return action >= 0 && action < ActionCount ? QString::fromUtf8(names[action]) : QString();
 }
 
-QString Gamepad::bindingName(int action) const
+QString Gamepad::bindingName(int action, int player) const
 {
     static const char *names[PhysCount] = {
         "A / ✕", "B / ○", "X / □", "Y / △", "LB / L1", "RB / R1", "LT / L2", "RT / R2",
         "STICK IZQ. (L3)", "STICK DER. (R3)", "BACK / SHARE", "START / OPTIONS",
     };
-    if (action < 0 || action >= ActionCount) return {};
-    const int p = m_map[size_t(action)];
+    if (action < 0 || action >= ActionCount || player < 0 || player >= MaxPlayers) return {};
+    const int p = m_maps[size_t(player)][size_t(action)];
     return p >= 0 && p < PhysCount ? QString::fromUtf8(names[p]) : QStringLiteral("—");
 }
 
-QList<int> Gamepad::mapping() const
+QList<int> Gamepad::mapping(int player) const
 {
-    return QList<int>(m_map.begin(), m_map.end());
+    const auto &m = m_maps[size_t(qBound(0, player, MaxPlayers - 1))];
+    return QList<int>(m.begin(), m.end());
 }
 
-void Gamepad::setMapping(const QList<int> &map)
+void Gamepad::setMapping(const QList<int> &map, int player)
 {
+    if (player < 0 || player >= MaxPlayers) return;
+    auto &m_map = m_maps[size_t(player)];
     // Un mapeo guardado por una versión anterior trae menos acciones: las nuevas quedan sin botón
     if (map.size() < ActPause + 1 || map.size() > ActionCount) return;
     for (int v : map)
@@ -84,16 +175,19 @@ void Gamepad::setMapping(const QList<int> &map)
     emit mappingChanged();
 }
 
-void Gamepad::resetMapping()
+void Gamepad::resetMapping(int player)
 {
-    m_map = kDefaultMap;
+    if (player < 0 || player >= MaxPlayers) return;
+    m_maps[size_t(player)] = kDefaultMap;
     ++m_mapRevision;
     emit mappingChanged();
 }
 
-void Gamepad::startCapture(int action)
+void Gamepad::startCapture(int action, int player)
 {
-    if (action < 0 || action >= ActionCount) return;
+    if (action < 0 || action >= ActionCount || player < 0 || player >= MaxPlayers) return;
+    m_keyCaptureAction = -1;
+    m_capturePlayer = player;
     m_captureAction = action;
     m_captureArmed = false;
     m_capturePrev = 0;
@@ -102,13 +196,15 @@ void Gamepad::startCapture(int action)
 
 void Gamepad::cancelCapture()
 {
-    if (m_captureAction < 0) return;
+    if (!capturing()) return;
     m_captureAction = -1;
+    m_keyCaptureAction = -1;
     emit capturingChanged();
 }
 
-Gamepad::Gamepad(QObject *parent) : QObject(parent), m_map(kDefaultMap)
+Gamepad::Gamepad(QObject *parent) : QObject(parent), m_keys(kDefaultKeys)
 {
+    m_maps.fill(kDefaultMap);
     SDL_SetMainReady();
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     // Habilita los drivers HIDAPI (DualShock 4, DualSense, Switch Pro, etc.)
@@ -144,6 +240,7 @@ void Gamepad::setMode(Mode m)
 {
     m_mode = m;
     m_keyboard = {};
+    m_keyRewind = false;
     m_heldAction.clear();
     // Evita que el botón usado para lanzar/salir se "arrastre" al otro modo
     updatePadState();
@@ -204,7 +301,7 @@ void Gamepad::pumpEvents()
 void Gamepad::updatePadState()
 {
     for (Pad &p : m_pads) {
-        if (!p.ctrl) { p.buttons = p.menu = p.phys = 0; p.guide = false; p.pause = false; continue; }
+        if (!p.ctrl) { p.buttons = p.menu = p.phys = 0; p.guide = p.pause = p.rewind = p.fast = false; continue; }
         SDL_GameController *c = p.ctrl;
         auto btn = [c](SDL_GameControllerButton b) { return SDL_GameControllerGetButton(c, b) != 0; };
         auto ax  = [c](SDL_GameControllerAxis a)   { return int(SDL_GameControllerGetAxis(c, a)); };
@@ -234,8 +331,13 @@ void Gamepad::updatePadState()
         bool pause = false;
         p.phys = ph;
         p.menu = m | applyMap(ph, kDefaultMap, nullptr, true);
-        p.buttons = m | applyMap(ph, m_map, &pause, (m_frame / 3) % 2 == 0); // ~10 disparos por segundo
+        p.buttons = m | applyMap(ph, m_maps[size_t(&p - m_pads.data())], &pause,
+                                 (m_frame / 3) % 2 == 0); // turbo: ~10 disparos por segundo
         p.pause = pause; // el botón de pausa no llega al juego
+        const auto &map = m_maps[size_t(&p - m_pads.data())];
+        auto held = [&](Action a) { return map[size_t(a)] >= 0 && (ph & (1u << map[size_t(a)])); };
+        p.rewind = held(ActRewind);
+        p.fast = held(ActFast);
         p.guide = btn(SDL_CONTROLLER_BUTTON_GUIDE); // botón Xbox / PS
     }
 }
@@ -277,6 +379,20 @@ bool Gamepad::retroButton(int port, unsigned retroId) const
     return (mask >> retroId) & 1;
 }
 
+bool Gamepad::rewindHeld() const
+{
+    bool on = m_keyRewind;
+    for (const Pad &p : m_pads) on |= p.rewind;
+    return on && m_mode == GameMode;
+}
+
+bool Gamepad::fastHeld() const
+{
+    bool on = false;
+    for (const Pad &p : m_pads) on |= p.fast;
+    return on && m_mode == GameMode;
+}
+
 int Gamepad::connectedCount() const
 {
     int n = 0;
@@ -311,6 +427,7 @@ void Gamepad::menuTick()
         } else if (const uint16_t fresh = ph & ~m_capturePrev) {
             int phys = 0;
             while (!(fresh & (1u << phys))) ++phys;
+            auto &m_map = m_maps[size_t(m_capturePlayer)];
             for (int a = 0; a < ActionCount; ++a)
                 if (m_map[size_t(a)] == phys) m_map[size_t(a)] = m_map[size_t(m_captureAction)]; // intercambia
             m_map[size_t(m_captureAction)] = phys;
@@ -376,42 +493,41 @@ void Gamepad::menuTick()
 
 bool Gamepad::eventFilter(QObject *obj, QEvent *ev)
 {
-    if (m_mode != GameMode || (ev->type() != QEvent::KeyPress && ev->type() != QEvent::KeyRelease))
+    const bool isKey = ev->type() == QEvent::KeyPress || ev->type() == QEvent::KeyRelease;
+
+    // Remapeo del teclado: la siguiente tecla que se pulse se asigna a la acción elegida
+    if (m_keyCaptureAction >= 0 && isKey) {
+        auto *ke = static_cast<QKeyEvent *>(ev);
+        const int key = ke->key();
+        if (ev->type() == QEvent::KeyRelease || ke->isAutoRepeat()) return true;
+        const bool reserved = key == Qt::Key_Escape || key == Qt::Key_P || key == Qt::Key_Pause
+                              || (key >= Qt::Key_F1 && key <= Qt::Key_F12) || key == Qt::Key_unknown
+                              || key == Qt::Key_Shift || key == Qt::Key_Control || key == Qt::Key_Alt || key == Qt::Key_Meta;
+        if (!reserved) {
+            int &slot = m_keys[size_t(m_keyCapturePlayer)][size_t(m_keyCaptureAction)];
+            for (auto &player : m_keys) // si la tecla ya se usaba, esa acción recibe la tecla anterior
+                for (int &k : player)
+                    if (k == key) k = slot;
+            slot = key;
+            ++m_mapRevision;
+            emit mappingChanged();
+        }
+        if (!reserved || key == Qt::Key_Escape) {
+            m_keyCaptureAction = -1;
+            emit capturingChanged();
+        }
+        return true;
+    }
+
+    if (m_mode != GameMode || !isKey)
         return QObject::eventFilter(obj, ev);
 
     auto *ke = static_cast<QKeyEvent *>(ev);
     if (ke->isAutoRepeat()) return true;
     const bool down = ev->type() == QEvent::KeyPress;
+    const int key = ke->key();
 
-    unsigned id = 0xFFFF;
-    size_t player = 0;
-    switch (ke->key()) {
-    case Qt::Key_Up:     id = RETRO_DEVICE_ID_JOYPAD_UP; break;
-    case Qt::Key_Down:   id = RETRO_DEVICE_ID_JOYPAD_DOWN; break;
-    case Qt::Key_Left:   id = RETRO_DEVICE_ID_JOYPAD_LEFT; break;
-    case Qt::Key_Right:  id = RETRO_DEVICE_ID_JOYPAD_RIGHT; break;
-    case Qt::Key_Z:      id = RETRO_DEVICE_ID_JOYPAD_B; break; // NeoGeo A
-    case Qt::Key_X:      id = RETRO_DEVICE_ID_JOYPAD_A; break; // NeoGeo B
-    case Qt::Key_A:      id = RETRO_DEVICE_ID_JOYPAD_Y; break; // NeoGeo C
-    case Qt::Key_S:      id = RETRO_DEVICE_ID_JOYPAD_X; break; // NeoGeo D
-    case Qt::Key_Q:      id = RETRO_DEVICE_ID_JOYPAD_L; break;
-    case Qt::Key_W:      id = RETRO_DEVICE_ID_JOYPAD_R; break;
-    case Qt::Key_Return:
-    case Qt::Key_Enter:
-    case Qt::Key_1:      id = RETRO_DEVICE_ID_JOYPAD_START; break;
-    case Qt::Key_5:
-    case Qt::Key_Space:  id = RETRO_DEVICE_ID_JOYPAD_SELECT; break; // moneda
-    // Jugador 2: I/K/J/L mueven, G H = A B, T Y = C D, 2 = start, 6 = moneda
-    case Qt::Key_I:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_UP; break;
-    case Qt::Key_K:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_DOWN; break;
-    case Qt::Key_J:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_LEFT; break;
-    case Qt::Key_L:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_RIGHT; break;
-    case Qt::Key_G:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_B; break;
-    case Qt::Key_H:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_A; break;
-    case Qt::Key_T:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_Y; break;
-    case Qt::Key_Y:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_X; break;
-    case Qt::Key_2:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_START; break;
-    case Qt::Key_6:      player = 1; id = RETRO_DEVICE_ID_JOYPAD_SELECT; break;
+    switch (key) {
     case Qt::Key_Escape:
         if (down) emit exitGameRequested();
         return true;
@@ -419,10 +535,29 @@ bool Gamepad::eventFilter(QObject *obj, QEvent *ev)
     case Qt::Key_Pause:
         if (down) emit pauseRequested();
         return true;
-    default:
-        return QObject::eventFilter(obj, ev); // F2/F5/F7 etc. los maneja la app
+    case Qt::Key_Backspace: // mantener = rebobinar (si está activado en Opciones)
+        m_keyRewind = down;
+        return true;
     }
-    if (down) m_keyboard[player] |= bit(id);
-    else      m_keyboard[player] &= uint16_t(~bit(id));
+
+    // Teclas asignadas por el usuario (o las de fábrica) para los jugadores 1 y 2
+    bool used = false;
+    for (size_t player = 0; player < m_keys.size(); ++player) {
+        for (int a = 0; a < KeyActionCount; ++a) {
+            if (m_keys[player][size_t(a)] != key) continue;
+            if (down) m_keyboard[player] |= bit(kKeyRetro[a]);
+            else      m_keyboard[player] &= uint16_t(~bit(kKeyRetro[a]));
+            used = true;
+        }
+    }
+    if (used) return true;
+
+    // Atajos fijos del jugador 1, si el usuario no les dio otro uso: Enter = start, Espacio = moneda
+    unsigned id = 0xFFFF;
+    if (key == Qt::Key_Return || key == Qt::Key_Enter) id = RETRO_DEVICE_ID_JOYPAD_START;
+    else if (key == Qt::Key_Space) id = RETRO_DEVICE_ID_JOYPAD_SELECT;
+    else return QObject::eventFilter(obj, ev); // F2/F5/F7 etc. los maneja la app
+    if (down) m_keyboard[0] |= bit(id);
+    else      m_keyboard[0] &= uint16_t(~bit(id));
     return true;
 }

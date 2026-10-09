@@ -22,6 +22,16 @@ class AppController : public QObject
     Q_PROPERTY(int lastIndex READ lastIndex WRITE setLastIndex NOTIFY settingsChanged)
     Q_PROPERTY(int volume READ volume WRITE setVolume NOTIFY settingsChanged)         // 0..100
     Q_PROPERTY(int aspectMode READ aspectMode WRITE setAspectMode NOTIFY settingsChanged) // ver EmulatorView
+    Q_PROPERTY(int crt READ crt WRITE setCrt NOTIFY settingsChanged)       // 0 no, 1 plano, 2 curvo
+    Q_PROPERTY(bool bezel READ bezel WRITE setBezel NOTIFY settingsChanged) // marco alrededor del juego
+    Q_PROPERTY(QString bezelImage READ bezelImage NOTIFY gameRunningChanged) // imagen del marco del juego actual ("" = el integrado)
+    // Al salir de un juego guarda la partida y al volver a abrirlo continúa donde se quedó
+    Q_PROPERTY(bool autoResume READ autoResume WRITE setAutoResume NOTIFY settingsChanged)
+    // Modo atracción: tras attractSeconds sin tocar nada, el menú recorre juegos solo
+    Q_PROPERTY(bool attract READ attract WRITE setAttract NOTIFY settingsChanged)
+    Q_PROPERTY(int attractSeconds READ attractSeconds CONSTANT)
+    Q_PROPERTY(bool rewind READ rewind WRITE setRewind NOTIFY settingsChanged)   // permite rebobinar
+    Q_PROPERTY(bool rewinding READ rewinding NOTIFY rewindingChanged)
     Q_PROPERTY(bool hideBroken READ hideBroken WRITE setHideBroken NOTIFY settingsChanged)
     Q_PROPERTY(bool hideClones READ hideClones WRITE setHideClones NOTIFY settingsChanged)
     Q_PROPERTY(bool fastForward READ fastForward WRITE setFastForward NOTIFY fastForwardChanged)
@@ -47,6 +57,14 @@ public:
     int lastIndex() const;   void setLastIndex(int v);
     int volume() const;      void setVolume(int v);
     int aspectMode() const;  void setAspectMode(int v);
+    int crt() const;         void setCrt(int v);
+    bool bezel() const;      void setBezel(bool v);
+    QString bezelImage() const { return m_bezelImage; }
+    bool autoResume() const; void setAutoResume(bool v);
+    bool attract() const;    void setAttract(bool v);
+    int attractSeconds() const; // ui/attractSeconds en arcade.ini (60 por defecto)
+    bool rewind() const;     void setRewind(bool v);
+    bool rewinding() const;
     bool hideBroken() const; void setHideBroken(bool v);
     bool hideClones() const; void setHideClones(bool v);
     bool fastForward() const; void setFastForward(bool v);
@@ -77,6 +95,7 @@ signals:
     void pausedChanged();
     void confirmingExitChanged();
     void fastForwardChanged();
+    void rewindingChanged();
     void statesChanged();
     void coreOptionsChanged();
     void settingsChanged();
@@ -87,6 +106,7 @@ signals:
 private:
     bool ensureCore(QString coreFile);
     QString statePath(int slot) const;
+    QString autoStatePath() const;
 
     QString m_base;
     LibretroCore *m_core;
@@ -95,7 +115,7 @@ private:
     QSettings m_settings;
     bool m_confirmExit = false;
     bool m_pausedBeforeConfirm = false;
-    QString m_title, m_rom, m_coreIni;
+    QString m_title, m_rom, m_coreIni, m_bezelImage;
     QElapsedTimer m_playClock;
     int m_stateRev = 0, m_optionsRev = 0;
 };

@@ -36,6 +36,7 @@ CONTROLES EN EL JUEGO
   Reiniciar                                                F1
   Scanlines / filtro suave                                 F2 / F3
   Avance rápido                                            F4
+  Rebobinar (activar antes en Opciones)                    Mantener Retroceso
   Guardar / cargar (ranura 1)                              F5 / F7
   Imagen (original, píxeles exactos, estirada)             F8
   Volumen - / +                                            F9 / F10
@@ -51,6 +52,8 @@ PREVIEWS (opcional)
   media\videos\<rom>.mp4     video que se reproduce al elegir el juego
   media\snaps\<rom>.png      captura (si no hay video)
   media\marquees\<rom>.png   logo del juego bajo la preview
+  media\bezels\<rom>.png     marco alrededor del juego (PNG del tamaño de la pantalla con el hueco
+                             transparente); default.png y default-vertical.png sirven para todos
   Ej.:  media\videos\kof98.mp4   media\snaps\mslug3.png
   Puedes descargarlos con un scraper como Skraper (skraper.net).
 

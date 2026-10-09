@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Quick Multimedia)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Quick Multimedia ShaderTools)
 find_package(SDL2 REQUIRED)
 
 qt_add_executable(Arcade WIN32
@@ -25,6 +25,12 @@ qt_add_qml_module(Arcade
     QML_FILES qml/Main.qml
     RESOURCES resources/names.txt resources/fbneo.txt
     NO_RESOURCE_TARGET_PATH
+)
+
+# Shaders del efecto CRT (se compilan a .qsb y quedan en :/shaders/)
+qt_add_shaders(Arcade "arcade_shaders"
+    PREFIX "/"
+    FILES shaders/crt.vert shaders/crt.frag
 )
 
 target_include_directories(Arcade PRIVATE src)

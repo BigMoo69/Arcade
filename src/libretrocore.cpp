@@ -200,6 +200,8 @@ void LibretroCore::unloadGame()
     m_api.unload_game();
     m_gameLoaded = false;
     m_fast = false;
+    m_rewind.clear();
+    if (m_rewinding) { m_rewinding = false; emit rewindingChanged(); }
     if (m_paused) { m_paused = false; emit pausedChanged(); }
     m_romData.clear();
     m_frame = QImage();
@@ -272,6 +274,39 @@ void LibretroCore::setFastForward(bool on)
 {
     m_fast = on && m_gameLoaded;
     m_nextFrameMs = double(m_clock.nsecsElapsed()) / 1e6;
+}
+
+void LibretroCore::setRewindEnabled(bool on)
+{
+    m_rewindOn = on;
+    if (!on) m_rewind.clear();
+}
+
+// Un cuadro de emulación. Normal: corre y cada 6 cuadros guarda un estado (unos 60 s de historia,
+// con tope de 256 MB). Rebobinando: cada 2 cuadros carga el estado anterior y lo dibuja (~3x hacia atrás).
+void LibretroCore::runFrame()
+{
+    if (m_rewinding) {
+        if (++m_rewindCounter % 2 == 0 && !m_rewind.empty()) {
+            const QByteArray &st = m_rewind.back();
+            m_api.unserialize(st.constData(), size_t(st.size()));
+            if (m_rewind.size() > 1) m_rewind.pop_back(); // el más antiguo se queda: ahí se detiene
+            m_api.run();
+        } else {
+            m_pad->poll(); // sin correr el núcleo hay que leer el mando aquí para notar que se soltó
+        }
+        return;
+    }
+    m_api.run();
+    if (!m_rewindOn || ++m_rewindCounter < 6) return;
+    m_rewindCounter = 0;
+    const size_t sz = m_api.serialize_size();
+    if (sz == 0) return;
+    QByteArray st(qsizetype(sz), Qt::Uninitialized);
+    if (!m_api.serialize(st.data(), sz)) return;
+    m_rewind.push_back(std::move(st));
+    const size_t maxStates = qBound<size_t>(20, (256u << 20) / sz, 600);
+    while (m_rewind.size() > maxStates) m_rewind.pop_front();
 }
 
 void LibretroCore::setVolume(double v)
@@ -348,8 +383,14 @@ double LibretroCore::aspectRatio() const
         const unsigned h = m_frame.isNull() ? m_av.geometry.base_height : unsigned(m_frame.height());
         ar = (h > 0) ? double(w) / double(h) : 4.0 / 3.0;
     }
-    // Igual que RetroArch: con rotación de 90/270 se invierte la relación.
-    if (m_rotation & 1) ar = 1.0 / ar;
+    // Con rotación de 90/270 la imagen final tiene la orientación contraria a la del cuadro
+    // (cuadro apaisado → juego vertical). Unos núcleos dan la relación ya girada (FBNeo: 3:4) y
+    // otros la del cuadro sin girar: solo se invierte si no corresponde con el resultado.
+    if (m_rotation & 1) {
+        const bool frameWide = m_frame.isNull() ? m_av.geometry.base_width >= m_av.geometry.base_height
+                                                : m_frame.width() >= m_frame.height();
+        if ((ar > 1.0) == frameWide) ar = 1.0 / ar;
+    }
     return ar;
 }
 
@@ -362,9 +403,14 @@ void LibretroCore::tick()
     const double frameMs = 1000.0 / fps;
     const double now = double(m_clock.nsecsElapsed()) / 1e6;
 
-    if (m_fast) { // hasta ~12 ms de emulación por vuelta; la pantalla se sigue refrescando
+    const bool rewind = m_rewindOn && m_pad && m_pad->rewindHeld();
+    if (rewind != m_rewinding) { m_rewinding = rewind; m_rewindCounter = 0; emit rewindingChanged(); }
+    const bool fast = !m_rewinding && (m_fast || (m_pad && m_pad->fastHeld()));
+    m_mute = fast || m_rewinding;
+
+    if (fast) { // hasta ~12 ms de emulación por vuelta; la pantalla se sigue refrescando
         for (int i = 0; i < 8 && m_gameLoaded && double(m_clock.nsecsElapsed()) / 1e6 - now < 12.0; ++i)
-            m_api.run();
+            runFrame();
         m_nextFrameMs = double(m_clock.nsecsElapsed()) / 1e6;
         return;
     }
@@ -376,7 +422,7 @@ void LibretroCore::tick()
 
     int frames = 0;
     while (now >= m_nextFrameMs && frames < 2 && m_gameLoaded) {
-        m_api.run();
+        runFrame();
         m_nextFrameMs += frameMs;
         ++frames;
     }
@@ -560,7 +606,7 @@ void LibretroCore::cbAudioSample(int16_t l, int16_t r)
 size_t LibretroCore::cbAudioBatch(const int16_t *data, size_t frames)
 {
     LibretroCore *self = s_self;
-    if (!self || !self->m_audioDev || !self->m_sink || self->m_fast) return frames;
+    if (!self || !self->m_audioDev || !self->m_sink || self->m_mute) return frames;
 
     const qsizetype bytes = qsizetype(frames * 2 * sizeof(int16_t));
     const qsizetype freeBytes = self->m_sink->bytesFree();

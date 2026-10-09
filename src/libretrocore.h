@@ -13,6 +13,7 @@
 #include <QElapsedTimer>
 #include <QTimer>
 #include <memory>
+#include <deque>
 
 #include "libretro/libretro.h"
 
@@ -44,6 +45,11 @@ public:
     void setFastForward(bool on);
     bool fastForward() const { return m_fast; }
     void setVolume(double v); // 0..1
+
+    // Rebobinar: guarda un estado cada pocos cuadros y, mientras el mando o el teclado mantengan
+    // el botón de rebobinar, los va cargando hacia atrás. Gasta memoria: por eso se puede apagar.
+    void setRewindEnabled(bool on);
+    bool rewinding() const { return m_rewinding; }
 
     // Cuadro actual ya girado y con la proporción de pantalla correcta (capturas y miniaturas)
     QImage screenshot() const;
@@ -77,6 +83,7 @@ signals:
     void frameReady();
     void gameStopped();
     void pausedChanged();
+    void rewindingChanged();
     void message(const QString &text);
 
 private:
@@ -152,6 +159,11 @@ private:
     bool m_varsDirty = false;
     bool m_varsUpdated = false; // hay un cambio que el núcleo aún no ha leído
     bool m_fast = false;
+    bool m_mute = false;            // avance rápido o rebobinado: sin sonido
+    bool m_rewindOn = false, m_rewinding = false;
+    std::deque<QByteArray> m_rewind; // estados guardados, el más reciente al final
+    int m_rewindCounter = 0;
+    void runFrame();
     double m_volume = 1.0;
     QByteArray m_getVarBuf;
 

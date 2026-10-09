@@ -181,8 +181,39 @@ El usuario habla español; responde en español, conciso y directo.
     guardado con 11 valores sigue valiendo (las nuevas quedan en -1). Teclado J2: I/J/K/L, G H T Y,
     2 start, 6 moneda (`m_keyboard[2]`). J2 probado con `hold:`/`release:` (pasos nuevos de
     `--test-actions`); **turbo y macros sin probar: hace falta un mando real**.
-  - **Pendiente de la lista de RetroArch:** shader CRT, rebobinar, trucos, mapeo por jugador/juego,
-    marcos (bezels), run-ahead.
+  - *Efecto CRT (2026-10-09):* `shaders/crt.vert|frag` compilados con `qt_add_shaders` (Qt ShaderTools;
+    el workflow instala `qtshadertools`). `EmulatorView::crt` (0 no, 1 plano, 2 curvo; `video/crt`) usa
+    un `QSGGeometryNode` con material propio (`CrtMaterial`/`CrtShader` en `emulatorview.cpp`): curvatura,
+    haz por línea según brillo, máscara RGB y viñeta. Con el backend software (pruebas offscreen) cae a
+    las scanlines simples. Parámetros fijos en `updatePaintNode` (scanline 0.85, mask 0.22).
+  - *Marcos:* `video/bezel`. Imagen `media/bezels/<rom>.png` → `default-vertical.png` → `default.png`
+    (estirada a toda la ventana, hueco transparente); sin imagen, `plainBezel` en QML rellena las franjas
+    con los colores del tema usando `EmulatorView::contentRect`.
+  - *Juegos verticales arreglados:* `LibretroCore::aspectRatio()` invertía la relación de FBNeo (que ya
+    la da girada, 3:4) y se veían apaisados; ahora solo invierte si no cuadra con el cuadro girado.
+  - *Continuar donde lo dejé:* `game/autoResume`; `stopGame()` guarda `saves/<rom>.auto` (partidas ≥10 s)
+    y `launch()` lo carga a los 250 ms. *Modo atracción:* `ui/attract` + `ui/attractSeconds` (60);
+    `attractOn` en `Main.qml` salta a un juego al azar cada 7 s hasta que haya cualquier entrada.
+  - *Pruebas con GPU:* `--test-hidden` (ventana real fuera de pantalla, sin foco) + `--test-actions`;
+    las pruebas automáticas van sin sonido. Usar una base aparte con `ARCADE_DIR` (ROMs por enlace duro).
+  - *Mapeo por jugador y de teclado (2026-10-09):* `Gamepad::m_maps[4]` (un mapeo por mando;
+    `input/map`, `map2`–`map4`) y `m_keys[2][KeyActionCount]` (teclas de J1 y J2; `input/keys1|2`, se
+    capturan en `eventFilter`; Esc, P, F1–F12 reservadas; Enter/Espacio siguen de start/moneda de J1 si
+    no se reasignan). La pantalla CONTROLES elige "dispositivo" con ◄► (mando J1–J4, teclado J1–J2) vía
+    `Pad.deviceName/rowCount/rowName/rowBinding/captureRow/resetDevice`. La captura de mando escucha
+    cualquier mando conectado. **No hay mapeo por juego.**
+  - *Rebobinar:* `game/rewind` (apagado por defecto). `LibretroCore::runFrame()` guarda un estado cada
+    6 cuadros (hasta 600 o 256 MB) y, con Retroceso o el botón asignado a "REBOBINAR (MANTENER)"
+    (`Gamepad::rewindHeld()`), carga uno cada 2 cuadros (~3x hacia atrás, sin sonido). También hay acción
+    "AVANCE RÁPIDO (MANTENER)". Probado con teclado en Metal Slug 2.
+  - *Trucos:* se bajó el paquete `finalburnneo/FBNeo-cheats` (3.415 `.ini`, 31 MB) a
+    `dist/system/fbneo/cheats/`. FBNeo los publica como opciones "[Cheat][rom.ini] Nombre"; el panel
+    `coreOpts` de la pausa las separa: "TRUCOS" muestra solo esas (sin el prefijo) y "OPCIONES DEL
+    EMULADOR" el resto. `stepCoreOption` no guarda los trucos en el `.ini`: duran hasta cerrar el Arcade.
+    1.919 de los zips del usuario tienen archivo propio. Solo FBNeo (otros núcleos usan `retro_cheat_set`,
+    sin implementar).
+  - **Pendiente de la lista de RetroArch:** mapeo por juego, sonidos de menú, récords (hiscore.dat),
+    vibración, run-ahead, núcleos con OpenGL.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`
     y `roms/favoritos.txt` (no borrarlos: el usuario usa el Arcade entre prueba y prueba), o usar una
     base aparte con `ARCADE_DIR`.

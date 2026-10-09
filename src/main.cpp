@@ -126,14 +126,21 @@ int main(int argc, char *argv[])
             win->showNormal();
         }
     };
+    // "--test-hidden": ventana real (con GPU, para probar shaders) pero fuera de la pantalla y sin
+    // quitarle el foco a lo que el usuario tenga abierto. Se usa junto con --windowed --test-actions.
+    const bool testHidden = QCoreApplication::arguments().contains(QStringLiteral("--test-hidden"));
+    if (testHidden)
+        win->setFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus | Qt::WindowStaysOnBottomHint);
     QObject::connect(&controller, &AppController::settingsChanged, win, applyWindowMode);
     applyWindowMode();
+    if (testHidden) win->setPosition(-8000, -8000);
 
     // Prueba automática del menú sin teclado ni captura de pantalla:
     //   Arcade.exe --test-actions "search,down,accept,shot:a.png,systemNext,shot:b.png"
     // Ejecuta una acción de menú cada 300 ms; "shot:<archivo>" guarda la ventana en PNG. Al final cierra.
     const int testArg = QCoreApplication::arguments().indexOf(QStringLiteral("--test-actions"));
     if (testArg >= 0) {
+        core.setVolume(0); // las pruebas automáticas no suenan
         auto *steps = new QStringList(QCoreApplication::arguments().value(testArg + 1).split(u',', Qt::SkipEmptyParts));
         auto *timer = new QTimer(&app);
         timer->setInterval(300);
@@ -172,7 +179,8 @@ int main(int argc, char *argv[])
             } else if (step.startsWith(QLatin1String("hold:")) || step.startsWith(QLatin1String("release:"))) {
                 // "hold:6" deja pulsada esa tecla y "release:6" la suelta (para probar el teclado dentro del juego)
                 const QChar c = step.section(u':', 1).at(0);
-                const int key = c.isLetter() ? Qt::Key_A + (c.toUpper().unicode() - 'A') : Qt::Key_0 + (c.unicode() - '0');
+                const int key = step.endsWith(QLatin1String(":bksp")) ? int(Qt::Key_Backspace) // "hold:bksp" = Retroceso
+                              : c.isLetter() ? Qt::Key_A + (c.toUpper().unicode() - 'A') : Qt::Key_0 + (c.unicode() - '0');
                 QKeyEvent ev(step.startsWith(u'h') ? QEvent::KeyPress : QEvent::KeyRelease, key, Qt::NoModifier, QString(c));
                 QCoreApplication::sendEvent(win, &ev);
             } else if (step.startsWith(QLatin1String("click:")) || step.startsWith(QLatin1String("dclick:"))) {

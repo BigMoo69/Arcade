@@ -35,12 +35,40 @@ Window {
     property bool remapOpen: false
     property string errorText: ""
     readonly property var aspectNames: ["ORIGINAL", "PÍXELES EXACTOS", "ESTIRADA"]
+    readonly property var crtNames: ["NO", "PLANO", "CURVO"]
+
+    // ---------------- Modo atracción ----------------
+    // Si nadie toca nada durante un rato, el menú va saltando solo de juego en juego como una
+    // máquina de salón. Cualquier botón, tecla o movimiento del mouse lo detiene.
+    property bool attractOn: false
+    readonly property bool menuIdle: !App.gameRunning && !optionsOpen && !searchOpen && !remapOpen
+                                     && errorText === "" && Games.count > 1
+    Timer {
+        id: idleTimer
+        interval: App.attractSeconds * 1000
+        running: App.attract && win.menuIdle && !win.attractOn
+        onTriggered: win.attractOn = true
+    }
+    Timer {
+        interval: 7000; repeat: true; triggeredOnStart: true
+        running: win.attractOn && win.menuIdle
+        onTriggered: win.select(Math.floor(Math.random() * Games.count))
+    }
+    onMenuIdleChanged: if (!menuIdle) attractOn = false
+    // Devuelve true si la entrada solo sirvió para despertar el menú
+    function wake() {
+        if (idleTimer.running) idleTimer.restart()
+        if (!attractOn) return false
+        attractOn = false
+        return true
+    }
 
     // ---------------- Entrada unificada (teclado + mandos) ----------------
     function act(a) {
         if (App.confirmingExit) { exitDlg.handle(a); return }
         if (App.paused) { pauseMenu.handle(a); return }
         if (App.gameRunning) return
+        if (wake()) return
         if (errorText !== "") { if (a === "accept" || a === "back") errorText = ""; return }
         if (Pad.capturing) return
         if (searchOpen) { search.handle(a); return }
@@ -120,7 +148,7 @@ Window {
         hoverEnabled: true; acceptedButtons: Qt.NoButton // solo observa: los clics pasan a lo de abajo
         cursorShape: !App.fullscreen || (win.mouseActive && (!App.gameRunning || App.confirmingExit || App.paused))
                      ? Qt.ArrowCursor : Qt.BlankCursor
-        onPositionChanged: { win.mouseActive = true; mouseIdle.restart() }
+        onPositionChanged: { win.mouseActive = true; mouseIdle.restart(); win.wake() }
     }
 
     // =======================================================================
@@ -139,6 +167,7 @@ Window {
             map[Qt.Key_PageUp] = "pageUp"; map[Qt.Key_PageDown] = "pageDown"
             map[Qt.Key_Return] = "accept"; map[Qt.Key_Enter] = "accept"
             map[Qt.Key_Escape] = "back"; map[Qt.Key_Backspace] = "back"
+            if (win.wake()) { e.accepted = true; return }
             // Las letras y números no son atajos: en el menú escriben directo en la barra de búsqueda
             if (e.key === Qt.Key_F11) { App.fullscreen = !App.fullscreen; e.accepted = true; return }
             if ((e.key === Qt.Key_F2 || e.key === Qt.Key_Insert) && !Pad.capturing) { win.act("favorite"); e.accepted = true; return }
@@ -489,6 +518,24 @@ Window {
                 }
             }
 
+            Rectangle {
+                anchors { bottom: screenFrame.bottom; horizontalCenter: screenFrame.horizontalCenter; bottomMargin: 14 * u }
+                visible: win.attractOn
+                width: attractText.width + 36 * u; height: 44 * u; radius: 6 * u
+                color: "#d0000000"; border.color: win.cAccent; border.width: 2 * u
+                Text {
+                    id: attractText
+                    anchors.centerIn: parent
+                    text: "DEMOSTRACIÓN  ·  PULSA UN BOTÓN"
+                    font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true; color: win.cAccent
+                    SequentialAnimation on opacity {
+                        loops: Animation.Infinite; running: win.attractOn
+                        NumberAnimation { to: 0.2; duration: 600 }
+                        NumberAnimation { to: 1.0; duration: 600 }
+                    }
+                }
+            }
+
             // Espera un poco antes de cargar el video para que la navegación rápida sea fluida
             Timer {
                 id: preview
@@ -595,6 +642,51 @@ Window {
         scanlines: App.scanlines
         smooth: App.smooth
         aspectMode: App.aspectMode
+        crt: App.crt
+
+        // ---------------- Marco alrededor del juego ----------------
+        // Imagen propia (media/bezels/<rom>.png o default.png, con el hueco transparente) o,
+        // si no hay, un marco sencillo con los colores del tema que rellena las franjas negras.
+        Image {
+            anchors.fill: parent
+            visible: App.bezel && App.bezelImage !== "" && App.aspectMode !== 2
+            source: App.bezel ? App.bezelImage : ""
+            fillMode: Image.Stretch; smooth: true; asynchronous: true
+        }
+        Item {
+            id: plainBezel
+            anchors.fill: parent
+            visible: App.bezel && App.bezelImage === "" && r.width > 0
+            readonly property rect r: emu.contentRect
+            Repeater { // izquierda, derecha, arriba, abajo
+                model: [ Qt.rect(0, 0, plainBezel.r.x, emu.height),
+                         Qt.rect(plainBezel.r.x + plainBezel.r.width, 0, emu.width - plainBezel.r.x - plainBezel.r.width, emu.height),
+                         Qt.rect(plainBezel.r.x, 0, plainBezel.r.width, plainBezel.r.y),
+                         Qt.rect(plainBezel.r.x, plainBezel.r.y + plainBezel.r.height, plainBezel.r.width,
+                                 emu.height - plainBezel.r.y - plainBezel.r.height) ]
+                Rectangle {
+                    x: modelData.x; y: modelData.y; width: Math.max(0, modelData.width); height: Math.max(0, modelData.height)
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: win.cBg1 }
+                        GradientStop { position: 0.5; color: Qt.darker(win.cBg2, 1.4) }
+                        GradientStop { position: 1; color: win.cBg1 }
+                    }
+                }
+            }
+            Rectangle { // moldura alrededor de la pantalla
+                x: plainBezel.r.x - border.width; y: plainBezel.r.y - border.width
+                width: plainBezel.r.width + 2 * border.width; height: plainBezel.r.height + 2 * border.width
+                color: "transparent"; radius: 6 * u
+                border.color: win.cAccent2; border.width: 4 * u
+            }
+            Rectangle {
+                x: plainBezel.r.x - 9 * u; y: plainBezel.r.y - 9 * u
+                width: plainBezel.r.width + 18 * u; height: plainBezel.r.height + 18 * u
+                color: "transparent"; radius: 10 * u
+                border.color: "#80000000"; border.width: 5 * u
+            }
+        }
+
         Keys.onPressed: (e) => {
             if (App.confirmingExit) {
                 if (e.key === Qt.Key_Left || e.key === Qt.Key_Right) win.act("left")
@@ -704,8 +796,8 @@ Window {
         // Aviso fijo mientras el avance rápido está activo
         Text {
             anchors { top: parent.top; right: parent.right; margins: 20 * u }
-            visible: App.fastForward && !App.paused
-            text: "►► AVANCE RÁPIDO"
+            visible: (App.fastForward || App.rewinding) && !App.paused
+            text: App.rewinding ? "◄◄ REBOBINANDO" : "►► AVANCE RÁPIDO"
             font.family: arcadeFont; font.pixelSize: 22 * u; font.bold: true
             color: win.cAccent; style: Text.Outline; styleColor: "black"
         }
@@ -727,15 +819,19 @@ Window {
                   side: function (d) { App.volume = App.volume + d * 10 } },
                 { label: "◄ IMAGEN: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 },
                   side: function (d) { App.aspectMode = App.aspectMode + d } },
+                { label: "◄ EFECTO CRT: " + win.crtNames[App.crt] + " ►", act: function () { App.crt = App.crt + 1 },
+                  side: function (d) { App.crt = App.crt + d } },
+                { label: "MARCO: " + (App.bezel ? "SÍ" : "NO"), act: function () { App.bezel = !App.bezel } },
                 { label: "AVANCE RÁPIDO: " + (App.fastForward ? "SÍ" : "NO"), act: function () { App.fastForward = !App.fastForward } },
                 { label: "CAPTURAR PANTALLA", act: function () { App.takeScreenshot() } },
+                { label: "TRUCOS", act: function () { coreOpts.index = 0; pauseMenu.panel = "cheats" } },
                 { label: "OPCIONES DEL EMULADOR", act: function () { coreOpts.index = 0; pauseMenu.panel = "core" } },
                 { label: "REINICIAR JUEGO", act: function () { App.resetGame(); App.togglePause() } },
                 { label: "SALIR DEL JUEGO", act: function () { App.stopGame() } }
             ]
             function handle(a) {
                 if (a === "pause") { App.togglePause(); return }
-                if (panel === "core") { coreOpts.handle(a); return }
+                if (panel === "core" || panel === "cheats") { coreOpts.handle(a); return }
                 if (panel !== "") { slots.handle(a); return }
                 if (a === "up") index = (index + items.length - 1) % items.length
                 else if (a === "down") index = (index + 1) % items.length
@@ -770,7 +866,7 @@ Window {
                     Rectangle {
                         readonly property bool sel: index === pauseMenu.index
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: 460 * u; height: 40 * u; radius: 4 * u
+                        width: 460 * u; height: 34 * u; radius: 4 * u
                         color: sel ? win.cAccent : "#40000000"
                         border.color: sel ? "white" : "transparent"; border.width: 2 * u
                         Text {
@@ -882,9 +978,14 @@ Window {
             Item {
                 id: coreOpts
                 anchors.fill: parent
-                visible: pauseMenu.panel === "core"
+                visible: pauseMenu.panel === "core" || pauseMenu.panel === "cheats"
                 property int index: 0
-                readonly property var entries: (App.optionsRev, App.gameRunning ? App.coreOptions() : [])
+                // FBNeo publica los trucos (system/fbneo/cheats/<rom>.ini) como opciones "[Cheat][rom.ini] Nombre":
+                // van en su propio panel y no se mezclan con las opciones normales
+                readonly property bool cheats: pauseMenu.panel === "cheats"
+                readonly property var all: (App.optionsRev, App.gameRunning ? App.coreOptions() : [])
+                readonly property var entries: all.filter(function (o) { return (o.label.indexOf("[Cheat]") === 0) === cheats })
+                function title(o) { return cheats ? o.label.replace(/^\[Cheat\](\[[^\]]*\])?\s*/, "") : o.label }
                 function step(d) { if (entries.length > 0) App.stepCoreOption(entries[index].key, d) }
                 function handle(a) {
                     var n = entries.length
@@ -904,7 +1005,7 @@ Window {
                     Text {
                         id: coreTitle
                         anchors { top: parent.top; topMargin: 16 * u; horizontalCenter: parent.horizontalCenter }
-                        text: "OPCIONES DEL EMULADOR"; color: win.cAccent2
+                        text: coreOpts.cheats ? "TRUCOS" : "OPCIONES DEL EMULADOR"; color: win.cAccent2
                         font.family: arcadeFont; font.pixelSize: 28 * u; font.bold: true
                     }
                     ListView {
@@ -921,7 +1022,7 @@ Window {
                             color: sel ? win.cAccent : "transparent"
                             Text {
                                 anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 * u; right: val.left; rightMargin: 10 * u }
-                                text: opt ? opt.label : ""; elide: Text.ElideRight
+                                text: opt ? coreOpts.title(opt) : ""; elide: Text.ElideRight
                                 color: sel ? win.cOnAccent : win.cText
                                 font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: sel
                             }
@@ -943,14 +1044,15 @@ Window {
                     Text {
                         anchors.centerIn: parent
                         visible: coreOpts.entries.length === 0
-                        text: "ESTE EMULADOR NO TIENE OPCIONES"; color: win.cDim
+                        text: coreOpts.cheats ? "NO HAY TRUCOS PARA ESTE JUEGO" : "ESTE EMULADOR NO TIENE OPCIONES"; color: win.cDim
                         font.family: arcadeFont; font.pixelSize: 20 * u
                     }
                     Text {
                         id: coreHelp
                         anchors { bottom: parent.bottom; bottomMargin: 12 * u; horizontalCenter: parent.horizontalCenter }
                         horizontalAlignment: Text.AlignHCenter
-                        text: "▲▼ ELEGIR    ◄► CAMBIAR    LB/RB SALTAR 10    Ⓑ / ESC VOLVER\nSE GUARDAN SOLAS · ALGUNAS SOLO SE APLICAN AL REINICIAR O VOLVER A ABRIR EL JUEGO"
+                        text: "▲▼ ELEGIR    ◄► CAMBIAR    LB/RB SALTAR 10    Ⓑ / ESC VOLVER\n" + (coreOpts.cheats ? "LOS TRUCOS SE APAGAN AL CERRAR EL ARCADE"
+                                                 : "SE GUARDAN SOLAS · ALGUNAS SOLO SE APLICAN AL REINICIAR O VOLVER A ABRIR EL JUEGO")
                         font.family: arcadeFont; font.pixelSize: 14 * u; color: win.cDim
                     }
                 }
@@ -973,13 +1075,18 @@ Window {
             { label: "◄ TEMA: " + Theme.name + " ►", act: function () { Theme.nextTheme(1) }, side: function (d) { Theme.nextTheme(d) } },
             { label: "◄ FONDO: " + Theme.backgroundName.substring(0, 24) + " ►", act: function () { Theme.nextBackground(1) }, side: function (d) { Theme.nextBackground(d) } },
             { label: "SCANLINES: " + (App.scanlines ? "SÍ" : "NO"), act: function () { App.scanlines = !App.scanlines } },
+            { label: "◄ EFECTO CRT: " + win.crtNames[App.crt] + " ►", act: function () { App.crt = App.crt + 1 }, side: function (d) { App.crt = App.crt + d } },
+            { label: "MARCO DEL JUEGO: " + (App.bezel ? "SÍ" : "NO"), act: function () { App.bezel = !App.bezel } },
             { label: "FILTRO SUAVE: " + (App.smooth ? "SÍ" : "NO"), act: function () { App.smooth = !App.smooth } },
             { label: "PANTALLA COMPLETA: " + (App.fullscreen ? "SÍ" : "NO"), act: function () { App.fullscreen = !App.fullscreen } },
             { label: "◄ IMAGEN DEL JUEGO: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 }, side: function (d) { App.aspectMode = App.aspectMode + d } },
             { label: "◄ VOLUMEN: " + App.volume + " % ►", act: function () { App.volume = App.volume >= 100 ? 0 : App.volume + 10 }, side: function (d) { App.volume = App.volume + d * 10 } },
+            { label: "CONTINUAR DONDE LO DEJÉ: " + (App.autoResume ? "SÍ" : "NO"), act: function () { App.autoResume = !App.autoResume } },
+            { label: "REBOBINAR (RETROCESO): " + (App.rewind ? "SÍ" : "NO"), act: function () { App.rewind = !App.rewind } },
+            { label: "MODO ATRACCIÓN: " + (App.attract ? "SÍ" : "NO"), act: function () { App.attract = !App.attract } },
             { label: "OCULTAR JUEGOS CON ✘: " + (App.hideBroken ? "SÍ" : "NO"), act: function () { win.refilter(function () { App.hideBroken = !App.hideBroken }) } },
             { label: "OCULTAR VERSIONES REPETIDAS: " + (App.hideClones ? "SÍ" : "NO"), act: function () { win.refilter(function () { App.hideClones = !App.hideClones }) } },
-            { label: "CONFIGURAR CONTROLES", act: function () { remap.index = 0; win.remapOpen = true } },
+            { label: "CONFIGURAR CONTROLES", act: function () { remap.index = 0; remap.dev = 0; win.remapOpen = true } },
             { label: "RECARGAR JUEGOS, TEMAS Y FONDOS", act: function () { Games.rescan(); Theme.reload(); win.current = 0; win.optionsOpen = false } },
             { label: "SALIR", act: function () { App.quit() } }
         ]
@@ -999,7 +1106,7 @@ Window {
             Column {
                 id: col
                 anchors.centerIn: parent
-                spacing: 6 * u
+                spacing: 4 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "OPCIONES"; color: win.cAccent2
@@ -1008,7 +1115,7 @@ Window {
                 Repeater {
                     model: options.items.length
                     Rectangle {
-                        width: 500 * u; height: 38 * u; radius: 4 * u
+                        width: 500 * u; height: 29 * u; radius: 4 * u
                         color: index === options.index ? win.cAccent : "transparent"
                         Text {
                             anchors.centerIn: parent
@@ -1033,15 +1140,24 @@ Window {
         color: "#c0000000"
         visible: win.remapOpen && !App.gameRunning
         property int index: 0
-        readonly property int actions: Pad.actionCount()
-        readonly property int rows: actions + 2 // + restablecer + volver
+        property int dev: 0 // 0..3 = mando de cada jugador, 4 y 5 = teclado de J1 y J2
+        readonly property bool keyboard: dev >= 4
+        readonly property int actions: Pad.rowCount(dev)
+        readonly property int rows: actions + 3 // dispositivo + acciones + restablecer + volver
+        function setDev(d) {
+            dev = (d + Pad.deviceCount()) % Pad.deviceCount()
+            index = Math.min(index, rows - 1)
+        }
         function handle(a) {
             if (a === "up") index = (index + rows - 1) % rows
             else if (a === "down") index = (index + 1) % rows
+            else if (a === "left") setDev(dev - 1)
+            else if (a === "right") setDev(dev + 1)
             else if (a === "back") win.remapOpen = false
             else if (a === "accept") {
-                if (index < actions) { Pad.startCapture(index); captureTimeout.restart() }
-                else if (index === actions) { Pad.resetMapping(); toast.show("Controles restablecidos") }
+                if (index === 0) setDev(dev + 1)
+                else if (index <= actions) { Pad.captureRow(dev, index - 1); captureTimeout.restart() }
+                else if (index === actions + 1) { Pad.resetDevice(dev); toast.show("Controles restablecidos") }
                 else win.remapOpen = false
             }
         }
@@ -1051,60 +1167,68 @@ Window {
         MouseArea { anchors.fill: parent; onClicked: if (!Pad.capturing) win.remapOpen = false; onWheel: {} }
         Rectangle {
             anchors.centerIn: parent
-            width: 640 * u; height: remapCol.height + 50 * u
+            width: 640 * u; height: remapCol.height + 40 * u
             color: win.cBg1; border.color: win.cAccent; border.width: 3 * u; radius: 8 * u
             MouseArea { anchors.fill: parent }
             Column {
                 id: remapCol
                 anchors.centerIn: parent
-                spacing: 4 * u
+                spacing: 2 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "CONTROLES"; color: win.cAccent2
-                    font.family: arcadeFont; font.pixelSize: 30 * u; font.bold: true
-                }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: Pad.connectedCount > 0 ? "ELIGE UNA ACCIÓN Y PULSA EL BOTÓN QUE QUIERAS" : "CONECTA UN MANDO PARA CONFIGURARLO"
-                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 15 * u
+                    font.family: arcadeFont; font.pixelSize: 28 * u; font.bold: true
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     horizontalAlignment: Text.AlignHCenter
-                    text: "TURBO = DISPARO AUTOMÁTICO AL MANTENER · MACRO = VARIOS BOTONES A LA VEZ\nTECLADO  J1: FLECHAS  Z X A S  1  5      J2: I J K L  G H T Y  2  6"
+                    text: remap.keyboard ? "ELIGE UNA ACCIÓN Y PULSA LA TECLA QUE QUIERAS · ESC CANCELA"
+                                         : "ELIGE UNA ACCIÓN Y PULSA EL BOTÓN DEL MANDO QUE QUIERAS\nTURBO = DISPARO AUTOMÁTICO AL MANTENER · MACRO = VARIOS BOTONES A LA VEZ"
                     color: win.cDim; font.family: arcadeFont; font.pixelSize: 13 * u
-                    bottomPadding: 6 * u
+                    bottomPadding: 4 * u
                 }
                 Repeater {
                     model: remap.rows
                     Rectangle {
                         readonly property bool sel: index === remap.index
+                        readonly property int row: index - 1 // fila de acción (la 0 es el selector de dispositivo)
+                        readonly property bool isAction: index >= 1 && index <= remap.actions
                         readonly property bool waiting: sel && Pad.capturing
-                        width: 580 * u; height: 27 * u; radius: 4 * u
-                        color: sel ? win.cAccent : "transparent"
+                        width: 580 * u; height: 22 * u; radius: 4 * u
+                        color: sel ? win.cAccent : (index === 0 ? "#30ffffff" : "transparent")
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             x: 16 * u
-                            visible: index < remap.actions
-                            text: Pad.actionName(index)
+                            visible: isAction
+                            text: isAction ? Pad.rowName(remap.dev, row) : ""
                             color: sel ? win.cOnAccent : win.cText
-                            font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
+                            font.family: arcadeFont; font.pixelSize: 16 * u; font.bold: true
                         }
                         Text {
                             anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 16 * u }
-                            visible: index < remap.actions
-                            text: waiting ? "PULSA UN BOTÓN…" : (Pad.mapRevision, Pad.bindingName(index))
+                            visible: isAction
+                            text: !isAction ? "" : waiting ? (remap.keyboard ? "PULSA UNA TECLA…" : "PULSA UN BOTÓN…")
+                                                           : (Pad.mapRevision, Pad.rowBinding(remap.dev, row))
                             color: sel ? (waiting ? "#900000" : "black") : win.cAccent
-                            font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
+                            font.family: arcadeFont; font.pixelSize: 16 * u; font.bold: true
                         }
                         Text {
                             anchors.centerIn: parent
-                            visible: index >= remap.actions
-                            text: index === remap.actions ? "RESTABLECER" : "VOLVER"
-                            color: sel ? win.cOnAccent : win.cText
-                            font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
+                            visible: !isAction
+                            text: index === 0 ? "◄ " + Pad.deviceName(remap.dev) + " ►"
+                                  : index === remap.actions + 1 ? "RESTABLECER ESTE " + (remap.keyboard ? "TECLADO" : "MANDO") : "VOLVER"
+                            color: sel ? win.cOnAccent : (index === 0 ? win.cAccent2 : win.cText)
+                            font.family: arcadeFont; font.pixelSize: 16 * u; font.bold: true
                         }
-                        MouseArea { anchors.fill: parent; onClicked: if (!Pad.capturing) { remap.index = index; remap.handle("accept") } }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: (m) => {
+                                if (Pad.capturing) return
+                                remap.index = index
+                                if (index === 0) remap.setDev(remap.dev + (m.x < width / 2 ? -1 : 1))
+                                else remap.handle("accept")
+                            }
+                        }
                     }
                 }
             }

@@ -66,9 +66,28 @@ El usuario habla español; responde en español, conciso y directo.
 - **Reparación de ROMs (2026-10-08):** 30 juegos se arreglaron reconstruyendo los archivos que FBNeo pide
   a partir de los datos del propio ZIP (sets antiguos: C-ROMs con las mitades intercambiadas, partidos o
   pegados; 3 tomaron archivos de otro ZIP). Al ZIP se le añaden los archivos nuevos sin quitar nada;
-  originales en `dist/roms_originales/`. Ahora **113 ✔ / 83 ✘**. Los 83 restantes no se pueden reconstruir:
-  son versiones desencriptadas de juegos que FBNeo exige encriptados (kof99–2003, garou, mslug3/4/5…),
-  revisiones distintas de un archivo (`p1`/`m1`/`s1`) o nombres de set que FBNeo no conoce (`*-5a`).
+  originales en `dist/roms_originales/`. Quedó en 113 ✔ / 83 ✘ tras esa primera ronda.
+- **Segunda ronda con el DAT de FBNeo (2026-10-08):** comparando CRC contra el DAT oficial de NeoGeo
+  (libretro/FBNeo `dats/`) se recuperaron 20 más → **133 ✔ / 63 ✘**. 14 se reconstruyeron como otro set
+  que FBNeo sí conoce (`kof2002`→`kof2k2fd`, `kof2001`→`kof2k1fd`, `kof98`→`kof98h`, `kof95`→`kof95a`,
+  `kof97-5a`→`kof97pls`, `bstars`→`bstarsh`, `socbrawl`→`socbrawlh`, `vliner`→`vliner6e`, `tws96`→`twsoc96`,
+  `mosyougi`→`moshougi`, `ncolumns`→`columnsn`, `ltorb1`→`ltorb`, `frogfest`→`ngfrog`, `ironclad`→`ironclado`);
+  el ZIP viejo pasó a `dist/roms_originales/`, la captura se copió al nombre nuevo y el título va en
+  `dist/roms/names.txt`. Otros 6 necesitaban archivos duplicados o rellenos (`diggerma`, `flipshot`,
+  `miexchng`, `puzzldpr`, `strhoop`, `samsho3`→`samsho3h`). A los 63 restantes les falta al menos un
+  archivo con datos realmente distintos (casi siempre `p1`, `m1`, `s1` o C-ROMs encriptados).
+- **Paquete `Downloads\neogeo_202403` (2026-10-08):** romset de archive.org con 117 ZIP en `Juegos\`;
+  115 coinciden al 100 % con el DAT de FBNeo. Se instalaron los 26 que el usuario no tenía funcionando
+  (19 con ✘ + 7 originales que sustituyen a las conversiones `kof2k2fd`, `kof2k1fd`, `kof98h`, `kof95a`,
+  `bstarsh`, `socbrawlh`, `samsho3h`, movidas a `dist/roms_convertidos/`). Con `kof2002` original se pudo
+  armar además `kof2002-5d`→`kf2k2mpl`. Estado: **153 ✔ / 43 ✘**. Los 43 son hacks de NeoRAGEx (`*-5a`…,
+  `cthd2003`, `svcchaos`, `kof10th`…) y unos pocos originales que el paquete no trae (`s1945p`, `preisle2`,
+  `zupapa`, `ganryu`, `nitd`, `rotd`, `pnyaa`, `bangbead`, `jockeygp`, `lans2004`, `neomrdo`, `gururin`,
+  `janshin`, `fightfev`). `Imgs NEOGEO.zip` trae 116 PNG 640×480 (captura + caja + logo) con nombre de
+  ROM, aún sin instalar. `NEOGEO.zip` (2,2 GB) parece ser lo mismo que `Juegos\`, no se abrió.
+- **NeoRAGEx 5.2a** (`Desktop\NeoRAGEx 5.2a`, de donde salieron ROMs y capturas): ignora el parámetro de
+  línea de comandos (abre su menú) y cambia la pantalla a 640×480, así que no sirve como emulador de
+  respaldo lanzado desde el Arcade. Es de código cerrado; no se puede fusionar con FBNeo.
 - **Remapeo de botones:** Opciones → "CONFIGURAR CONTROLES" (`remap` en `Main.qml`). `Gamepad` separa
   botones físicos (`Phys`) de acciones (`Action`: A/B/C/D, L/R/L2/R2, moneda, start, pausa) con `m_map`;
   `startCapture()` asigna el siguiente botón pulsado e intercambia si ya estaba en uso. Se guarda en

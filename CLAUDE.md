@@ -84,7 +84,7 @@ El usuario habla español; responde en español, conciso y directo.
   `cthd2003`, `svcchaos`, `kof10th`…) y unos pocos originales que el paquete no trae (`s1945p`, `preisle2`,
   `zupapa`, `ganryu`, `nitd`, `rotd`, `pnyaa`, `bangbead`, `jockeygp`, `lans2004`, `neomrdo`, `gururin`,
   `janshin`, `fightfev`). `Imgs NEOGEO.zip` trae 116 PNG 640×480 (captura + caja + logo) con nombre de
-  ROM, aún sin instalar. `NEOGEO.zip` (2,2 GB) parece ser lo mismo que `Juegos\`, no se abrió.
+  ROM; se instalaron en `dist/media/snaps/` (115 juegos; el `.png` tiene prioridad sobre el `.bmp` viejo). `NEOGEO.zip` (2,2 GB) parece ser lo mismo que `Juegos\`, no se abrió.
 - **NeoRAGEx 5.2a** (`Desktop\NeoRAGEx 5.2a`, de donde salieron ROMs y capturas): ignora el parámetro de
   línea de comandos (abre su menú) y cambia la pantalla a 640×480, así que no sirve como emulador de
   respaldo lanzado desde el Arcade. Es de código cerrado; no se puede fusionar con FBNeo.

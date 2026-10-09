@@ -31,6 +31,17 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
     });
     connect(m_core, &LibretroCore::message, this, &AppController::toast);
     connect(m_pad, &Gamepad::pauseRequested, this, &AppController::togglePause);
+
+    // Mapeo de botones: input/map en arcade.ini, un número de botón físico por acción
+    QList<int> map;
+    for (const QString &v : m_settings.value(QStringLiteral("input/map")).toString().split(u',', Qt::SkipEmptyParts))
+        map << v.toInt();
+    m_pad->setMapping(map); // se ignora si no es válido
+    connect(m_pad, &Gamepad::mappingChanged, this, [this] {
+        QStringList out;
+        for (int v : m_pad->mapping()) out << QString::number(v);
+        m_settings.setValue(QStringLiteral("input/map"), out.join(u','));
+    });
     connect(m_core, &LibretroCore::pausedChanged, this, [this] {
         m_pad->setPaused(m_core->isPaused());
         emit pausedChanged();

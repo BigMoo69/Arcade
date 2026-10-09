@@ -63,11 +63,22 @@ El usuario habla español; responde en español, conciso y directo.
 - **Pausa:** clic del stick derecho (R3, ya no se envía al juego) o tecla P/Pausa. `LibretroCore::setPaused`
   detiene cuadros y suspende el audio; en pausa `Gamepad::menuTick` sigue llamando a `poll()`.
   Probado con la tecla P (overlay "PAUSA", reanuda bien); R3 con mando real sin probar.
+- **Reparación de ROMs (2026-10-08):** 30 juegos se arreglaron reconstruyendo los archivos que FBNeo pide
+  a partir de los datos del propio ZIP (sets antiguos: C-ROMs con las mitades intercambiadas, partidos o
+  pegados; 3 tomaron archivos de otro ZIP). Al ZIP se le añaden los archivos nuevos sin quitar nada;
+  originales en `dist/roms_originales/`. Ahora **113 ✔ / 83 ✘**. Los 83 restantes no se pueden reconstruir:
+  son versiones desencriptadas de juegos que FBNeo exige encriptados (kof99–2003, garou, mslug3/4/5…),
+  revisiones distintas de un archivo (`p1`/`m1`/`s1`) o nombres de set que FBNeo no conoce (`*-5a`).
+- **Remapeo de botones:** Opciones → "CONFIGURAR CONTROLES" (`remap` en `Main.qml`). `Gamepad` separa
+  botones físicos (`Phys`) de acciones (`Action`: A/B/C/D, L/R/L2/R2, moneda, start, pausa) con `m_map`;
+  `startCapture()` asigna el siguiente botón pulsado e intercambia si ya estaba en uso. Se guarda en
+  `input/map` de `arcade.ini`. Solo afecta al juego (el menú usa el mapeo por defecto), es el mismo
+  para los 4 mandos y no cubre teclado ni direcciones. Pantalla vista; la captura con mando real sin probar.
 - **Herramientas de prueba:** `Arcade.exe --rom <rom>` (arranca directo) y `--check-rom <rom>` (carga sin
   ventana; `[check] OK|FALLA` en stderr con `QT_FORCE_STDERR_LOGGING=1`; `ARCADE_LOG_ALL=1` vuelca todo
   el log del núcleo). Un proceso por ROM: cargar muchos seguidos en el mismo proceso hace caer a FBNeo.
 - **Falta verificar** (lo tiene que hacer el usuario): audio sin cortes, mandos reales, juegos verticales.
 
 ## Ideas siguientes (si el usuario las pide)
-Favoritos / más jugados, sonidos de menú, menú dentro de la pausa, remapeo de botones,
+Favoritos / más jugados, sonidos de menú, menú dentro de la pausa, remapeo por jugador y de teclado,
 filtros por sistema (NeoGeo / CPS / PGM), shaders CRT más elaborados, modo kiosko al arrancar Windows.

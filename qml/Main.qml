@@ -26,12 +26,15 @@ Window {
     property int current: Math.min(App.lastIndex, Math.max(0, Games.count - 1))
     property var game: Games.count > 0 ? Games.get(current) : ({})
     property bool optionsOpen: false
+    property bool remapOpen: false
     property string errorText: ""
 
     // ---------------- Entrada unificada (teclado + mandos) ----------------
     function act(a) {
         if (App.gameRunning) return
         if (errorText !== "") { if (a === "accept" || a === "back") errorText = ""; return }
+        if (Pad.capturing) return
+        if (remapOpen) { remap.handle(a); return }
         if (optionsOpen) { options.handle(a); return }
         switch (a) {
         case "up":       move(-1); break
@@ -86,6 +89,7 @@ Window {
             map[Qt.Key_Return] = "accept"; map[Qt.Key_Enter] = "accept"; map[Qt.Key_Z] = "accept"; map[Qt.Key_1] = "accept"
             map[Qt.Key_Escape] = "back"; map[Qt.Key_X] = "back"; map[Qt.Key_Backspace] = "back"
             if (e.key === Qt.Key_F11) { App.fullscreen = !App.fullscreen; e.accepted = true; return }
+            if (Pad.capturing) { if (e.key === Qt.Key_Escape) Pad.cancelCapture(); e.accepted = true; return }
             if (map[e.key] !== undefined) { win.act(map[e.key]); e.accepted = true }
         }
 
@@ -296,7 +300,7 @@ Window {
             Rectangle { anchors.top: parent.top; width: parent.width; height: 2 * u; color: win.cAccent2 }
             Text {
                 anchors.verticalCenter: parent.verticalCenter; x: 24 * u
-                text: "▲▼ ELEGIR   ◄► SALTAR 10   LB/RB LETRA   Ⓐ/✕ JUGAR   Ⓑ/○ OPCIONES   R3 PAUSA EN JUEGO"
+                text: "▲▼ ELEGIR   ◄► SALTAR 10   LB/RB LETRA   Ⓐ/✕ JUGAR   Ⓑ/○ OPCIONES"
                 font.family: arcadeFont; font.pixelSize: 16 * u; color: win.cText
             }
             Text {
@@ -356,7 +360,7 @@ Window {
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "STICK DERECHO (R3) / P  CONTINUAR      SELECT+START / ESC  SALIR"
+                    text: (Pad.mapRevision, Pad.bindingName(10)) + " / P  CONTINUAR      MONEDA+START / ESC  SALIR"
                     font.family: arcadeFont; font.pixelSize: 18 * u; color: win.cText
                 }
             }
@@ -370,13 +374,14 @@ Window {
         id: options
         anchors.fill: parent
         color: "#c0000000"
-        visible: win.optionsOpen && !App.gameRunning
+        visible: win.optionsOpen && !win.remapOpen && !App.gameRunning
         property int index: 0
         readonly property var items: [
             { label: "CONTINUAR", act: function () { win.optionsOpen = false } },
             { label: "SCANLINES: " + (App.scanlines ? "SÍ" : "NO"), act: function () { App.scanlines = !App.scanlines } },
             { label: "FILTRO SUAVE: " + (App.smooth ? "SÍ" : "NO"), act: function () { App.smooth = !App.smooth } },
             { label: "PANTALLA COMPLETA: " + (App.fullscreen ? "SÍ" : "NO"), act: function () { App.fullscreen = !App.fullscreen } },
+            { label: "CONFIGURAR CONTROLES", act: function () { remap.index = 0; win.remapOpen = true } },
             { label: "RECARGAR LISTA DE JUEGOS", act: function () { Games.rescan(); win.current = 0; win.optionsOpen = false } },
             { label: "SALIR", act: function () { App.quit() } }
         ]
@@ -409,6 +414,85 @@ Window {
                             text: options.items[index].label
                             color: index === options.index ? "black" : win.cText
                             font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: true
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =======================================================================
+    //  CONTROLES (Opciones → Configurar controles)
+    //  Cada fila es una acción del juego; al aceptar espera el botón del mando que la hará.
+    // =======================================================================
+    Rectangle {
+        id: remap
+        anchors.fill: parent
+        color: "#c0000000"
+        visible: win.remapOpen && !App.gameRunning
+        property int index: 0
+        readonly property int actions: Pad.actionCount()
+        readonly property int rows: actions + 2 // + restablecer + volver
+        function handle(a) {
+            if (a === "up") index = (index + rows - 1) % rows
+            else if (a === "down") index = (index + 1) % rows
+            else if (a === "back") win.remapOpen = false
+            else if (a === "accept") {
+                if (index < actions) { Pad.startCapture(index); captureTimeout.restart() }
+                else if (index === actions) { Pad.resetMapping(); toast.show("Controles restablecidos") }
+                else win.remapOpen = false
+            }
+        }
+        // Si nadie pulsa nada (p. ej. no hay mando), deja de esperar
+        Timer { id: captureTimeout; interval: 6000; onTriggered: Pad.cancelCapture() }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 640 * u; height: remapCol.height + 50 * u
+            color: win.cBg1; border.color: win.cAccent; border.width: 3 * u; radius: 8 * u
+            Column {
+                id: remapCol
+                anchors.centerIn: parent
+                spacing: 4 * u
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "CONTROLES"; color: win.cAccent2
+                    font.family: arcadeFont; font.pixelSize: 30 * u; font.bold: true
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: Pad.connectedCount > 0 ? "ELIGE UNA ACCIÓN Y PULSA EL BOTÓN QUE QUIERAS" : "CONECTA UN MANDO PARA CONFIGURARLO"
+                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 15 * u
+                    bottomPadding: 8 * u
+                }
+                Repeater {
+                    model: remap.rows
+                    Rectangle {
+                        readonly property bool sel: index === remap.index
+                        readonly property bool waiting: sel && Pad.capturing
+                        width: 580 * u; height: 34 * u; radius: 4 * u
+                        color: sel ? win.cAccent : "transparent"
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: 16 * u
+                            visible: index < remap.actions
+                            text: Pad.actionName(index)
+                            color: sel ? "black" : win.cText
+                            font.family: arcadeFont; font.pixelSize: 19 * u; font.bold: true
+                        }
+                        Text {
+                            anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 16 * u }
+                            visible: index < remap.actions
+                            text: waiting ? "PULSA UN BOTÓN…" : (Pad.mapRevision, Pad.bindingName(index))
+                            color: sel ? (waiting ? "#900000" : "black") : win.cAccent
+                            font.family: arcadeFont; font.pixelSize: 19 * u; font.bold: true
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            visible: index >= remap.actions
+                            text: index === remap.actions ? "RESTABLECER" : "VOLVER"
+                            color: sel ? "black" : win.cText
+                            font.family: arcadeFont; font.pixelSize: 19 * u; font.bold: true
                         }
                     }
                 }

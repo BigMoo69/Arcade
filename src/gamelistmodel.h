@@ -20,7 +20,8 @@ public:
         TitleRole, YearRole, MakerRole, PathRole,
         VideoRole, ImageRole, MarqueeRole,
         StatusRole, // 1 = funciona, -1 = no funciona, 0 = sin probar
-        SystemRole
+        SystemRole,
+        CoreRole    // archivo del núcleo libretro que lo corre ("" = FinalBurn Neo)
     };
 
     explicit GameListModel(QObject *parent = nullptr);
@@ -58,7 +59,12 @@ signals:
 
 private:
     struct Meta { QString title, year, maker, system; };
-    struct Game { QString rom, title, year, maker, path, system, key; }; // key = texto en minúsculas para buscar
+    struct Game { QString rom, title, year, maker, path, system, key, core; }; // key = texto en minúsculas para buscar
+    // Sistema extra definido en cores/sistemas.ini: sus ROMs van en roms/<folder>/ y los corre otro núcleo
+    struct SystemDef { QString id, name, core, folder; QStringList exts; };
+    void loadSystemDefs();
+    void writeDefaultSystems(const QString &file) const;
+    QVector<SystemDef> m_defs;
 
     const Game &at(int row) const { return m_all.at(m_view.at(row)); }
     void loadNamesFile(const QString &file, bool overwrite);

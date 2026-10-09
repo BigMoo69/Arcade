@@ -9,7 +9,10 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QDebug>
+#include <QDirIterator>
+#include <QProcess>
 #include <cstdarg>
+#include <cstring>
 #include <cstdio>
 
 LibretroCore *LibretroCore::s_self = nullptr;
@@ -25,11 +28,33 @@ LibretroCore::LibretroCore(Gamepad *pad, QObject *parent)
 
 LibretroCore::~LibretroCore()
 {
+    unloadCore();
+    if (s_self == this) s_self = nullptr;
+}
+
+QString LibretroCore::describe() const
+{
+    if (!m_coreInited) return QStringLiteral("(sin núcleo)");
+    retro_system_info sys{};
+    m_api.get_system_info(&sys);
+    return QStringLiteral("%1 %2 | extensiones: %3 | %4%5")
+        .arg(QString::fromUtf8(sys.library_name ? sys.library_name : "?"),
+             QString::fromUtf8(sys.library_version ? sys.library_version : "?"),
+             QString::fromUtf8(sys.valid_extensions ? sys.valid_extensions : "-"),
+             sys.need_fullpath ? QStringLiteral("lee el archivo él mismo") : QStringLiteral("recibe el ROM en memoria"),
+             sys.block_extract ? QStringLiteral(", abre los zip él mismo") : QString());
+}
+
+void LibretroCore::unloadCore()
+{
     unloadGame();
     if (m_coreInited && m_api.deinit)
         m_api.deinit();
-    m_lib.unload();
-    if (s_self == this) s_self = nullptr;
+    if (m_lib.isLoaded()) m_lib.unload();
+    m_coreInited = false;
+    m_api = Api{};
+    m_vars.clear();
+    m_corePath.clear();
 }
 
 template <typename T>
@@ -41,6 +66,9 @@ static bool resolveSym(QLibrary &lib, T &out, const char *name)
 
 bool LibretroCore::loadCore(const QString &corePath, const QString &systemDir, const QString &saveDir)
 {
+    if (m_coreInited && corePath == m_corePath) return true; // ya es el núcleo activo
+    unloadCore();                                            // solo hay un núcleo cargado a la vez
+
     m_systemDir = QDir::toNativeSeparators(systemDir).toUtf8();
     m_saveDir   = QDir::toNativeSeparators(saveDir).toUtf8();
 
@@ -73,8 +101,13 @@ bool LibretroCore::loadCore(const QString &corePath, const QString &systemDir, c
     if (!ok) {
         m_error = QStringLiteral("El archivo no es un núcleo libretro válido: %1").arg(corePath);
         m_lib.unload();
+        m_api = Api{};
         return false;
     }
+    // Opcionales: memoria de guardado (pilas de cartucho en consolas)
+    resolveSym(m_lib, m_api.get_memory_data, "retro_get_memory_data");
+    resolveSym(m_lib, m_api.get_memory_size, "retro_get_memory_size");
+    m_corePath = corePath;
 
     m_api.set_environment(&LibretroCore::cbEnvironment);
     m_api.init();
@@ -95,14 +128,23 @@ bool LibretroCore::loadGame(const QString &romPath)
     retro_system_info sys{};
     m_api.get_system_info(&sys);
 
-    m_romPathUtf8 = QDir::toNativeSeparators(romPath).toUtf8();
+    // Los núcleos arcade abren el .zip ellos mismos (block_extract). Los de consola esperan el ROM
+    // suelto: si viene en .zip se extrae a una carpeta temporal y se carga el archivo de dentro.
+    QString contentPath = romPath;
+    if (!sys.block_extract && romPath.endsWith(QLatin1String(".zip"), Qt::CaseInsensitive)) {
+        contentPath = extractFromZip(romPath, QString::fromLatin1(sys.valid_extensions ? sys.valid_extensions : ""));
+        if (contentPath.isEmpty()) return false; // m_error ya explica por qué
+    }
+    m_sramPath = QString::fromUtf8(m_saveDir) + u'/' + QFileInfo(romPath).completeBaseName() + QStringLiteral(".srm");
+
+    m_romPathUtf8 = QDir::toNativeSeparators(contentPath).toUtf8();
     retro_game_info info{};
     info.path = m_romPathUtf8.constData();
 
     if (!sys.need_fullpath) {
-        QFile f(romPath);
+        QFile f(contentPath);
         if (!f.open(QIODevice::ReadOnly)) {
-            m_error = QStringLiteral("No se pudo abrir %1").arg(romPath);
+            m_error = QStringLiteral("No se pudo abrir %1").arg(contentPath);
             return false;
         }
         m_romData = f.readAll();
@@ -121,12 +163,17 @@ bool LibretroCore::loadGame(const QString &romPath)
     const bool loaded = m_api.load_game(&info);
     m_loading = false;
     if (!loaded) {
-        m_error = QStringLiteral("No se pudo iniciar \"%1\".\n\nRevisa que el ROM sea de la versión correcta "
-                                 "de FinalBurn Neo y que neogeo.zip esté en la carpeta roms si es de NeoGeo.")
-                      .arg(QFileInfo(romPath).fileName());
+        m_error = m_isFbneo
+            ? QStringLiteral("No se pudo iniciar \"%1\".\n\nRevisa que el ROM sea de la versión correcta "
+                             "de FinalBurn Neo y que neogeo.zip esté en la carpeta roms si es de NeoGeo.")
+                  .arg(QFileInfo(romPath).fileName())
+            : QStringLiteral("El emulador %1 no pudo iniciar \"%2\".\n\nRevisa que el archivo sea del sistema correcto "
+                             "y, si ese sistema necesita BIOS, que esté en la carpeta system.")
+                  .arg(QString::fromUtf8(sys.library_name ? sys.library_name : "?"), QFileInfo(romPath).fileName());
         m_romData.clear();
         return false;
     }
+    loadSram();
 
     for (unsigned p = 0; p < 4; ++p)
         m_api.set_controller_port_device(p, RETRO_DEVICE_JOYPAD);
@@ -147,12 +194,66 @@ void LibretroCore::unloadGame()
     if (!m_gameLoaded) return;
     m_timer.stop();
     stopAudio();
+    saveSram();
     m_api.unload_game();
     m_gameLoaded = false;
     if (m_paused) { m_paused = false; emit pausedChanged(); }
     m_romData.clear();
     m_frame = QImage();
     emit gameStopped();
+}
+
+// Extrae del .zip el primer archivo con una extensión que el núcleo acepte ("sfc|smc|…").
+// Usa tar.exe, que viene con Windows 10/11 y también lee zip (bsdtar en Linux/macOS).
+QString LibretroCore::extractFromZip(const QString &zipPath, const QString &validExts)
+{
+    const QString tmp = QString::fromUtf8(m_saveDir) + QStringLiteral("/tmp");
+    QDir(tmp).removeRecursively();
+    QDir().mkpath(tmp);
+    QProcess tar;
+    tar.start(QStringLiteral("tar"), { QStringLiteral("-xf"), QDir::toNativeSeparators(zipPath),
+                                       QStringLiteral("-C"), QDir::toNativeSeparators(tmp) });
+    if (!tar.waitForFinished(60000) || tar.exitCode() != 0) {
+        m_error = QStringLiteral("No se pudo descomprimir %1.\n\nPrueba a descomprimir el ROM a mano y dejar el "
+                                 "archivo suelto en la carpeta del sistema.").arg(QFileInfo(zipPath).fileName());
+        return {};
+    }
+    const QStringList exts = validExts.toLower().split(u'|', Qt::SkipEmptyParts);
+    QDirIterator it(tmp, QDir::Files, QDirIterator::Subdirectories);
+    QString first;
+    while (it.hasNext()) {
+        const QString f = it.next();
+        if (first.isEmpty()) first = f;
+        if (exts.contains(QFileInfo(f).suffix().toLower())) return f;
+    }
+    if (first.isEmpty())
+        m_error = QStringLiteral("El archivo %1 está vacío.").arg(QFileInfo(zipPath).fileName());
+    return first; // sin extensión reconocida: que el núcleo decida
+}
+
+// Memoria de guardado del cartucho (.srm junto a los savestates): se lee al cargar y se escribe al salir
+void LibretroCore::loadSram()
+{
+    if (m_isFbneo || !m_api.get_memory_data || !m_api.get_memory_size) return; // FBNeo guarda su NVRAM solo
+    const size_t size = m_api.get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    void *mem = m_api.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    QFile f(m_sramPath);
+    if (size == 0 || !mem || !f.open(QIODevice::ReadOnly)) return;
+    const QByteArray data = f.readAll();
+    memcpy(mem, data.constData(), qMin(size, size_t(data.size())));
+}
+
+void LibretroCore::saveSram()
+{
+    if (!m_gameLoaded || m_isFbneo || !m_api.get_memory_data || !m_api.get_memory_size) return;
+    const size_t size = m_api.get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    const void *mem = m_api.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    if (size == 0 || !mem) return;
+    const QByteArray data(static_cast<const char *>(mem), qsizetype(size));
+    if (data.count('\0') == data.size() && !QFileInfo::exists(m_sramPath)) return; // nada guardado aún
+    QDir().mkpath(QFileInfo(m_sramPath).absolutePath());
+    QFile f(m_sramPath);
+    if (f.open(QIODevice::WriteOnly)) f.write(data);
 }
 
 void LibretroCore::setPaused(bool paused)

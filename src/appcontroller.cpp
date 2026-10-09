@@ -105,13 +105,23 @@ void AppController::setLastIndex(int v)
     emit settingsChanged();
 }
 
-bool AppController::ensureCore()
+// Deja cargado el núcleo que corre ese juego (coreFile vacío = FinalBurn Neo). Solo hay uno en
+// memoria: al cambiar de sistema se descarga el anterior.
+bool AppController::ensureCore(QString coreFile)
 {
-    if (m_coreLoaded) return true;
+    if (coreFile.isEmpty()) coreFile = QString::fromLatin1(kCoreFile);
+#ifndef Q_OS_WIN
+    // sistemas.ini nombra los núcleos como en Windows; en otros sistemas cambia la extensión
+    if (coreFile.endsWith(QLatin1String(".dll"))) coreFile = coreFile.chopped(4) + QFileInfo(QString::fromLatin1(kCoreFile)).suffix().prepend(u'.');
+#endif
+    const QString corePath = m_base + QStringLiteral("/cores/") + coreFile;
+    if (m_core->corePath() == corePath) return true;
 
-    // Opciones del núcleo opcionales: cores/fbneo.ini con líneas "clave = valor"
+    // Opciones del núcleo opcionales: cores/<nombre>.ini (fbneo.ini, snes9x.ini…) con líneas "clave = valor"
     QHash<QByteArray, QByteArray> overrides;
-    QFile ini(m_base + QStringLiteral("/cores/fbneo.ini"));
+    QString iniName = QFileInfo(coreFile).completeBaseName();
+    if (iniName.endsWith(QLatin1String("_libretro"))) iniName.chop(9);
+    QFile ini(m_base + QStringLiteral("/cores/") + iniName + QStringLiteral(".ini"));
     if (ini.open(QIODevice::ReadOnly | QIODevice::Text)) {
         while (!ini.atEnd()) {
             const QByteArray line = ini.readLine().trimmed();
@@ -127,24 +137,22 @@ bool AppController::ensureCore()
 
     QDir().mkpath(m_base + QStringLiteral("/saves"));
     QDir().mkpath(m_base + QStringLiteral("/system"));
-    const QString corePath = m_base + QStringLiteral("/cores/") + QString::fromLatin1(kCoreFile);
     if (!QFileInfo::exists(corePath)) {
-        emit error(QStringLiteral("Falta el emulador.\n\nCopia %1 en la carpeta:\n%2")
-                       .arg(QString::fromLatin1(kCoreFile), QDir::toNativeSeparators(m_base + QStringLiteral("/cores"))));
+        emit error(QStringLiteral("Falta el emulador de este sistema.\n\nCopia %1 en la carpeta:\n%2")
+                       .arg(coreFile, QDir::toNativeSeparators(m_base + QStringLiteral("/cores"))));
         return false;
     }
     if (!m_core->loadCore(corePath, m_base + QStringLiteral("/system"), m_base + QStringLiteral("/saves"))) {
         emit error(m_core->lastError());
         return false;
     }
-    m_coreLoaded = true;
     return true;
 }
 
 void AppController::launch(int row)
 {
     const QVariantMap g = m_games->get(row);
-    if (g.isEmpty() || !ensureCore()) return;
+    if (g.isEmpty() || !ensureCore(g.value(QStringLiteral("core")).toString())) return;
 
     m_title = g.value(QStringLiteral("title")).toString();
     m_rom = g.value(QStringLiteral("rom")).toString();

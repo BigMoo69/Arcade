@@ -114,6 +114,21 @@ El usuario habla español; responde en español, conciso y directo.
   clic en la barra la limpian / abren el teclado en pantalla. El teclado en pantalla (`search`) se despliega
   dentro del panel de la lista, entre la barra y los resultados; el preview de la derecha no se tapa. `lastIndex` guarda la posición en la lista completa.
   Hoy el usuario solo tiene NEO GEO, así que LT/RT avisa "solo hay un sistema".
+- **Varios núcleos (2026-10-09):** los `.zip` sueltos en `roms/` siguen siendo de FBNeo; cada sistema
+  extra se define en `cores/sistemas.ini` (bloques `[id]` con `nombre`, `nucleo`, `carpeta`, `extensiones`;
+  se crea con NES, SNES, Mega Drive, Master System, GB, GBA, PC Engine, PSX y MAME 2003-Plus) y sus ROMs van
+  en `roms/<carpeta>/`. El nombre interno lleva la carpeta (`snes/mario`): capturas en
+  `media/snaps/snes/mario.png`, guardados en `saves/snes/`. `GameListModel` añade el rol `core`;
+  `AppController::ensureCore(coreFile)` carga el núcleo del juego y `LibretroCore` descarga el anterior
+  (solo uno en memoria). Opciones por núcleo en `cores/<nombre>.ini`. Nuevo en el host: SRAM (`.srm` en
+  `saves/`), ROMs de consola en `.zip` (se extraen con `tar` a `saves/tmp/` cuando el núcleo no pone
+  `block_extract`). Solo núcleos con render por software (no hay contexto OpenGL). Probado el cambio
+  FBNeo → segunda copia de FBNeo → FBNeo y el aviso de núcleo ausente. En `dist/cores/` hay 7 núcleos más
+  bajados del buildbot de libretro (nightly 2026-10-08): `snes9x`, `genesis_plus_gx`, `fceumm`, `gambatte`,
+  `mgba`, `mame2003_plus`, `pcsx_rearmed`; los 8 cargan (`Arcade.exe --core-info` los lista). MAME 2003-Plus
+  probado con ROMs arcade en `roms/mame/` (galaga, dkong, sf2, tmnt, bublbobl arrancan y dibuja bien;
+  `pacman` falla porque en MAME es clon de `puckman`). **Los núcleos de consola no se han probado con
+  ningún juego** (el usuario no tiene ROMs de consola todavía). `build_windows.bat` solo baja FBNeo.
 - **Temas y fondos (2026-10-08):** `src/theme.*` (context prop `Theme`). `Theme.c` es un mapa con
   accent, accent2, onAccent, text, dim, bg1, bg2, header1, header2, panel, border, grid, showGrid, darken;
   `Main.qml` toma de ahí `cAccent`, `cPanel`, etc. 5 temas integrados (clásico, neón, fósforo verde,

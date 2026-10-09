@@ -57,6 +57,18 @@ int main(int argc, char *argv[])
     EmulatorView::setCore(&core);
     qmlRegisterType<EmulatorView>("ArcadeNative", 1, 0, "EmulatorView");
 
+    // "Arcade.exe --core-info" carga cada núcleo de cores/ y dice qué es (stderr), sin abrir la ventana
+    if (QCoreApplication::arguments().contains(QStringLiteral("--core-info"))) {
+        const QDir cores(base + QStringLiteral("/cores"));
+        for (const QFileInfo &fi : cores.entryInfoList({ QStringLiteral("*_libretro.*") }, QDir::Files, QDir::Name)) {
+            if (fi.suffix() == QLatin1String("ini")) continue;
+            const bool ok = core.loadCore(fi.absoluteFilePath(), base + QStringLiteral("/system"), base + QStringLiteral("/saves"));
+            qWarning().noquote() << "[core-info]" << fi.fileName() << "->" << (ok ? core.describe() : core.lastError().simplified());
+            core.unloadCore();
+        }
+        return 0;
+    }
+
     // "Arcade.exe --check-rom mslug" prueba cargar ese juego sin abrir la ventana y escribe el
     // resultado en stderr: "[check] OK <rom>" o "[check] FALLA <rom>". Antes salen las líneas
     // "[core] ... is required" con los archivos que FBNeo echa en falta (aunque diga OK).
@@ -125,13 +137,17 @@ int main(int argc, char *argv[])
         auto *steps = new QStringList(QCoreApplication::arguments().value(testArg + 1).split(u',', Qt::SkipEmptyParts));
         auto *timer = new QTimer(&app);
         timer->setInterval(300);
-        QObject::connect(timer, &QTimer::timeout, &app, [=, &controller, &app] {
+        QObject::connect(timer, &QTimer::timeout, &app, [=, &controller, &app, &games] {
             if (steps->isEmpty()) { timer->stop(); app.quit(); return; }
             const QString step = steps->takeFirst();
             if (step.startsWith(QLatin1String("shot:"))) {
                 win->grabWindow().save(step.mid(5));
             } else if (step == QLatin1String("exit")) {
                 controller.requestExit();
+            } else if (step.startsWith(QLatin1String("launch:"))) {
+                const QString rom = step.mid(7).toLower();
+                for (int row = 0; row < games.rowCount(); ++row)
+                    if (games.get(row).value(QStringLiteral("rom")).toString() == rom) { controller.launch(row); break; }
             } else if (step == QLatin1String("toggle-pause")) {
                 controller.togglePause();
             } else if (step == QLatin1String("wait")) {

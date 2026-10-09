@@ -86,6 +86,70 @@ void GameListModel::loadDats()
     }
 }
 
+// cores/sistemas.ini: un bloque [id] por sistema con nombre, nucleo, carpeta y extensiones.
+// Si no existe se crea con los sistemas más comunes ya definidos (solo falta copiar el núcleo y los ROMs).
+void GameListModel::loadSystemDefs()
+{
+    m_defs.clear();
+    const QString file = m_base + QStringLiteral("/cores/sistemas.ini");
+    if (!QFileInfo::exists(file)) writeDefaultSystems(file);
+    QFile f(file);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+    QTextStream in(&f);
+    in.setEncoding(QStringConverter::Utf8);
+    SystemDef cur;
+    auto flush = [&] {
+        if (!cur.id.isEmpty() && !cur.core.isEmpty() && !cur.exts.isEmpty()) {
+            if (cur.folder.isEmpty()) cur.folder = cur.id;
+            if (cur.name.isEmpty()) cur.name = cur.id.toUpper();
+            m_defs.push_back(cur);
+        }
+        cur = SystemDef{};
+    };
+    while (!in.atEnd()) {
+        const QString line = in.readLine().trimmed();
+        if (line.isEmpty() || line.startsWith(u';') || line.startsWith(u'#')) continue;
+        if (line.startsWith(u'[') && line.endsWith(u']')) { flush(); cur.id = line.mid(1, line.size() - 2).trimmed().toLower(); continue; }
+        const int eq = int(line.indexOf(u'='));
+        if (eq <= 0) continue;
+        const QString key = line.left(eq).trimmed().toLower();
+        const QString val = line.mid(eq + 1).section(u';', 0, 0).trimmed();
+        if (key == u"nombre") cur.name = val.toUpper();
+        else if (key == u"nucleo") cur.core = val;
+        else if (key == u"carpeta") cur.folder = val;
+        else if (key == u"extensiones")
+            for (const QString &e : val.toLower().split(u',', Qt::SkipEmptyParts)) cur.exts << e.trimmed();
+    }
+    flush();
+    for (const SystemDef &d : m_defs) QDir(m_base).mkpath(QStringLiteral("roms/") + d.folder);
+}
+
+void GameListModel::writeDefaultSystems(const QString &file) const
+{
+    QDir().mkpath(QFileInfo(file).absolutePath());
+    QFile f(file);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+    out << "; ===== Sistemas extra de Arcade Multijuegos =====\n"
+           "; Los .zip sueltos en roms/ son arcade y los corre FinalBurn Neo (no hace falta definirlos aqui).\n"
+           "; Cada bloque de abajo es otro sistema: sus juegos van en roms/<carpeta>/ y los corre el nucleo\n"
+           "; libretro indicado, que debe estar en esta carpeta cores/. Si el nucleo no esta, el juego\n"
+           "; aparece en la lista pero avisa al intentar abrirlo.\n"
+           "; Solo sirven nucleos que dibujan por software (no los que necesitan OpenGL/Vulkan).\n"
+           "; Para agregar un sistema copia un bloque y cambia los cuatro valores.\n"
+           "\n"
+           "[nes]\nnombre = NINTENDO NES\nnucleo = fceumm_libretro.dll\ncarpeta = nes\nextensiones = nes,zip\n\n"
+           "[snes]\nnombre = SUPER NINTENDO\nnucleo = snes9x_libretro.dll\ncarpeta = snes\nextensiones = sfc,smc,zip\n\n"
+           "[megadrive]\nnombre = MEGA DRIVE\nnucleo = genesis_plus_gx_libretro.dll\ncarpeta = megadrive\nextensiones = md,gen,smd,bin,zip\n\n"
+           "[mastersystem]\nnombre = MASTER SYSTEM\nnucleo = genesis_plus_gx_libretro.dll\ncarpeta = mastersystem\nextensiones = sms,zip\n\n"
+           "[gb]\nnombre = GAME BOY\nnucleo = gambatte_libretro.dll\ncarpeta = gb\nextensiones = gb,gbc,zip\n\n"
+           "[gba]\nnombre = GAME BOY ADVANCE\nnucleo = mgba_libretro.dll\ncarpeta = gba\nextensiones = gba,zip\n\n"
+           "[pcengine]\nnombre = PC ENGINE\nnucleo = mednafen_pce_fast_libretro.dll\ncarpeta = pcengine\nextensiones = pce,zip\n\n"
+           "[psx]\nnombre = PLAYSTATION\nnucleo = pcsx_rearmed_libretro.dll\ncarpeta = psx\nextensiones = cue,chd,pbp,m3u\n\n"
+           "[mame]\nnombre = MAME\nnucleo = mame2003_plus_libretro.dll\ncarpeta = mame\nextensiones = zip\n";
+}
+
 void GameListModel::loadStatus()
 {
     m_status.clear();
@@ -216,6 +280,33 @@ void GameListModel::rescan()
         m_all.push_back(g);
     }
 
+    // Otros sistemas (consolas, MAME…): roms/<carpeta>/ con el núcleo que diga cores/sistemas.ini.
+    // El nombre interno lleva la carpeta ("snes/mario") para no chocar con otro sistema; así las
+    // capturas van en media/snaps/snes/mario.png y los guardados en saves/snes/.
+    loadSystemDefs();
+    for (const SystemDef &d : m_defs) {
+        QDir dir(m_base + QStringLiteral("/roms/") + d.folder);
+        if (!dir.exists()) continue;
+        QStringList filters;
+        for (const QString &e : d.exts) filters << QStringLiteral("*.") + e;
+        for (const QFileInfo &fi : dir.entryInfoList(filters, QDir::Files, QDir::Name)) {
+            if (biosSet().contains(fi.completeBaseName().toLower())) continue; // BIOS de MAME, etc.
+            Game g;
+            g.rom = d.folder.toLower() + u'/' + fi.completeBaseName().toLower();
+            g.path = fi.absoluteFilePath();
+            g.title = fi.completeBaseName();
+            g.system = d.name;
+            g.core = d.core;
+            const auto it = m_meta.constFind(g.rom); // títulos propios: "snes/mario|Super Mario World|1990|Nintendo"
+            if (it != m_meta.cend()) {
+                if (!it->title.isEmpty()) g.title = it->title;
+                g.year = it->year; g.maker = it->maker;
+            }
+            g.key = (g.title + u' ' + fi.completeBaseName()).toLower();
+            m_all.push_back(g);
+        }
+    }
+
     std::sort(m_all.begin(), m_all.end(), [](const Game &a, const Game &b) {
         return QString::compare(a.title, b.title, Qt::CaseInsensitive) < 0;
     });
@@ -262,6 +353,7 @@ QVariant GameListModel::data(const QModelIndex &index, int role) const
     case PathRole:    return g.path;
     case StatusRole:  return m_status.value(g.rom, 0);
     case SystemRole:  return g.system;
+    case CoreRole:    return g.core;
     case VideoRole:
         return mediaFile(g.rom, { QStringLiteral("videos/"), QString() },
                          { QStringLiteral(".mp4"), QStringLiteral(".webm"), QStringLiteral(".avi"), QStringLiteral(".mkv") });
@@ -280,7 +372,7 @@ QHash<int, QByteArray> GameListModel::roleNames() const
     return {
         { RomRole, "rom" }, { TitleRole, "title" }, { YearRole, "year" },
         { MakerRole, "maker" }, { PathRole, "path" }, { VideoRole, "video" },
-        { ImageRole, "image" }, { MarqueeRole, "marquee" }, { StatusRole, "status" }, { SystemRole, "system" },
+        { ImageRole, "image" }, { MarqueeRole, "marquee" }, { StatusRole, "status" }, { SystemRole, "system" }, { CoreRole, "core" },
     };
 }
 

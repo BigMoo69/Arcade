@@ -26,7 +26,11 @@ public:
     ~LibretroCore() override;
 
     // Ruta de la DLL del núcleo, directorio de sistema (BIOS) y de guardado.
+    // Solo hay un núcleo cargado a la vez: pedir otro descarga el anterior.
     bool loadCore(const QString &corePath, const QString &systemDir, const QString &saveDir);
+    void unloadCore();
+    QString corePath() const { return m_corePath; }
+    QString describe() const; // nombre, versión y extensiones del núcleo cargado (para diagnóstico)
     bool loadGame(const QString &romPath);
     void unloadGame();
     bool isRunning() const { return m_gameLoaded; }
@@ -72,6 +76,9 @@ private:
 
     bool environment(unsigned cmd, void *data);
     void tick();
+    QString extractFromZip(const QString &zipPath, const QString &validExts);
+    void loadSram();
+    void saveSram();
     void startAudio(double sampleRate);
     void stopAudio();
 
@@ -96,6 +103,8 @@ private:
         bool (*unserialize)(const void *, size_t);
         bool (*load_game)(const retro_game_info *);
         void (*unload_game)();
+        void *(*get_memory_data)(unsigned);  // opcional
+        size_t (*get_memory_size)(unsigned); // opcional
     } m_api{};
 
     static LibretroCore *s_self;
@@ -111,6 +120,7 @@ private:
     QStringList m_loadProblems;
     QString m_error;
 
+    QString m_corePath, m_sramPath;
     QByteArray m_systemDir, m_saveDir;
     QByteArray m_romData;   // si el núcleo no pide ruta completa
     QByteArray m_romPathUtf8;

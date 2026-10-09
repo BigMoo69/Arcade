@@ -59,7 +59,7 @@ signals:
     void error(const QString &text);
 
 private:
-    bool ensureCore();
+    bool ensureCore(QString coreFile);
     QString statePath(int slot) const;
 
     QString m_base;
@@ -67,7 +67,6 @@ private:
     Gamepad *m_pad;
     GameListModel *m_games;
     QSettings m_settings;
-    bool m_coreLoaded = false;
     bool m_confirmExit = false;
     bool m_pausedBeforeConfirm = false;
     QString m_title, m_rom;

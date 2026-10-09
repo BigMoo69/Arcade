@@ -35,20 +35,27 @@ cmake -S . -B build -A x64 ^
 cmake --build build --config Release || exit /b 1
 
 REM ---- Armar dist\ ----
-if exist dist rmdir /s /q dist
-mkdir dist
+REM dist\ NO se borra: ahi viven tus ROMs, capturas, partidas y ajustes. Solo se actualiza el programa.
+if not exist dist mkdir dist
 if exist build\Release\Arcade.exe (copy build\Release\Arcade.exe dist\ >nul) else (copy build\Arcade.exe dist\ >nul)
 copy third_party\SDL2-%SDL_VER%\lib\x64\SDL2.dll dist\ >nul
 "%QT_DIR%\bin\windeployqt.exe" --release --qmldir qml --no-translations dist\Arcade.exe || exit /b 1
 
 for %%d in (roms cores dats fonts system saves media\videos media\snaps media\marquees) do mkdir dist\%%d 2>nul
-copy extras\fbneo.ini dist\cores\ >nul
+if not exist dist\cores\fbneo.ini copy extras\fbneo.ini dist\cores\ >nul
 copy LEEME.txt dist\ >nul
 
-REM ---- Emulador FinalBurn Neo (nucleo libretro) ----
-echo Descargando FinalBurn Neo...
-powershell -Command "Invoke-WebRequest https://buildbot.libretro.com/nightly/windows/x86_64/latest/fbneo_libretro.dll.zip -OutFile build\fbneo.zip"
-powershell -Command "Expand-Archive build\fbneo.zip -DestinationPath dist\cores -Force"
+REM ---- Emuladores (nucleos libretro) ----
+REM fbneo = arcade (los .zip sueltos en roms\). Los demas son los sistemas de cores\sistemas.ini.
+REM Solo se descargan los que falten: un nucleo ya instalado no se reemplaza, porque una version
+REM nueva puede exigir ROMs distintos. Para actualizar uno, borra su .dll de dist\cores y vuelve a ejecutar.
+set CORES=fbneo snes9x genesis_plus_gx fceumm gambatte mgba mame2003_plus pcsx_rearmed
+for %%c in (%CORES%) do (
+    if not exist dist\cores\%%c_libretro.dll (
+        echo Descargando nucleo %%c...
+        powershell -Command "$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest https://buildbot.libretro.com/nightly/windows/x86_64/latest/%%c_libretro.dll.zip -OutFile build\%%c.zip; Expand-Archive build\%%c.zip -DestinationPath dist\cores -Force } catch { Write-Host '  no se pudo descargar %%c: se puede copiar a mano en dist\cores' }"
+    )
+)
 
 echo.
 echo ===== LISTO =====

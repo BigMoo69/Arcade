@@ -21,7 +21,7 @@ El usuario habla español; responde en español, conciso y directo.
 | `src/theme.*` | Temas de color y fondo de pantalla (integrados + `themes/` + `fondos/`) |
 | `src/appcontroller.*` | Puente QML: launch/stop/reset/save/load, ajustes en `arcade.ini` (QSettings) |
 | `qml/Main.qml` | Toda la UI: lista numerada, preview con video (retraso 350 ms), opciones, errores, toasts, teclas F1–F11 |
-| `build_windows.bat` | Descarga SDL2 2.30.9 VC, compila (sin `-G`, usa el VS más nuevo), `windeployqt`, arma `dist/` y baja FBNeo del buildbot de libretro |
+| `build_windows.bat` | Descarga SDL2 2.30.9 VC, compila (sin `-G`, usa el VS más nuevo), `windeployqt`, actualiza `dist/` sin borrarla y baja del buildbot de libretro los núcleos que falten |
 | `.github/workflows/windows.yml` | Mismo build en GitHub Actions → artefacto `Arcade-Windows` |
 
 ## Entorno del usuario (Windows)
@@ -128,7 +128,10 @@ El usuario habla español; responde en español, conciso y directo.
   `mgba`, `mame2003_plus`, `pcsx_rearmed`; los 8 cargan (`Arcade.exe --core-info` los lista). MAME 2003-Plus
   probado con ROMs arcade en `roms/mame/` (galaga, dkong, sf2, tmnt, bublbobl arrancan y dibuja bien;
   `pacman` falla porque en MAME es clon de `puckman`). **Los núcleos de consola no se han probado con
-  ningún juego** (el usuario no tiene ROMs de consola todavía). `build_windows.bat` solo baja FBNeo.
+  ningún juego** (el usuario no tiene ROMs de consola todavía). `build_windows.bat` y el workflow de GitHub bajan los 8
+  núcleos; el .bat **ya no borra `dist/`** (antes hacía `rmdir`) y solo descarga los núcleos que falten,
+  para no cambiar de versión un núcleo cuyos ROMs ya se verificaron. Ojo al lanzar el .bat desde las
+  herramientas de esta sesión: `cmd` tiene `NoDefaultCurrentDirectoryInExePath=1`, hay que usar `.\build_windows.bat`.
 - **Temas y fondos (2026-10-08):** `src/theme.*` (context prop `Theme`). `Theme.c` es un mapa con
   accent, accent2, onAccent, text, dim, bg1, bg2, header1, header2, panel, border, grid, showGrid, darken;
   `Main.qml` toma de ahí `cAccent`, `cPanel`, etc. 5 temas integrados (clásico, neón, fósforo verde,

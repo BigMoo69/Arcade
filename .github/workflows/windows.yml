@@ -48,8 +48,13 @@ jobs:
           }
           Copy-Item extras/fbneo.ini dist/cores/
           Copy-Item LEEME.txt dist/
-          Invoke-WebRequest https://buildbot.libretro.com/nightly/windows/x86_64/latest/fbneo_libretro.dll.zip -OutFile fbneo.zip
-          Expand-Archive fbneo.zip -DestinationPath dist/cores -Force
+          # Núcleos libretro: fbneo (arcade) y los sistemas de cores/sistemas.ini
+          foreach ($c in 'fbneo','snes9x','genesis_plus_gx','fceumm','gambatte','mgba','mame2003_plus','pcsx_rearmed') {
+            try {
+              Invoke-WebRequest "https://buildbot.libretro.com/nightly/windows/x86_64/latest/${c}_libretro.dll.zip" -OutFile "$c.zip"
+              Expand-Archive "$c.zip" -DestinationPath dist/cores -Force
+            } catch { Write-Host "No se pudo descargar el núcleo $c" }
+          }
 
       - uses: actions/upload-artifact@v4
         with:

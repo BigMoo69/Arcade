@@ -1,4 +1,4 @@
-﻿# Arcade Multijuegos — contexto para Claude Code
+# Arcade Multijuegos — contexto para Claude Code
 
 Frontend estilo máquina multijuegos arcade de principios de los 2000 (Pandora Box / NeoGeo):
 un solo `Arcade.exe` que muestra la lista de juegos con previews y corre los ROMs con

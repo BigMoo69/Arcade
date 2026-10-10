@@ -111,7 +111,7 @@ void GameListModel::loadSystemDefs()
     SystemDef cur;
     auto flush = [&] {
         if (!cur.program.isEmpty()) cur.core = u'@' + cur.id; // emulador aparte
-        if (!cur.id.isEmpty() && !cur.core.isEmpty() && !cur.exts.isEmpty()) {
+        if (!cur.id.isEmpty() && !cur.core.isEmpty() && (!cur.exts.isEmpty() || !cur.inside.isEmpty())) {
             if (cur.folder.isEmpty()) cur.folder = cur.id;
             if (cur.name.isEmpty()) cur.name = cur.id.toUpper();
             m_defs.push_back(cur);
@@ -134,6 +134,7 @@ void GameListModel::loadSystemDefs()
             cur.romDir = QDir::fromNativeSeparators(val);
             if (QDir::isRelativePath(cur.romDir)) cur.romDir = m_base + u'/' + cur.romDir;
         }
+        else if (key == u"dentro") cur.inside = QDir::fromNativeSeparators(val);
         else if (key == u"reubicar")
             for (const QString &e : val.split(u',', Qt::SkipEmptyParts)) cur.relocate << e.trimmed();
         else if (key == u"carpeta") cur.folder = val;
@@ -173,6 +174,8 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "; Las rutas de 'programa' y 'juegos' pueden ser relativas a la carpeta del Arcade (emuladores\\...).\n"
            "; 'reubicar' = archivos de configuracion del emulador que guardan rutas completas: el Arcade las\n"
            "; corrige solo si la carpeta cambia de sitio (por ejemplo al copiar todo a otro PC).\n"
+           "; 'dentro' = para juegos que son carpetas: el archivo que hay dentro de cada una (ver [ps3]).\n"
+           "; En 'argumentos', {rom} es el archivo del juego y {nombre} su nombre sin extension.\n"
            "\n"
            "[nes]\nnombre = NINTENDO NES\nnucleo = fceumm_libretro.dll\ncarpeta = nes\nextensiones = nes,zip\n\n"
            "[snes]\nnombre = SUPER NINTENDO\nnucleo = snes9x_libretro.dll\ncarpeta = snes\nextensiones = sfc,smc,zip\n\n"
@@ -223,6 +226,10 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "reubicar = xemu.toml\ncarpeta = xbox\nextensiones = iso,xiso\n\n"
            "[xbox360]\nnombre = XBOX 360\nprograma = emuladores\\xenia\\xenia.exe\nargumentos = \"{rom}\" --fullscreen=true\n"
            "carpeta = xbox360\nextensiones = iso,xex,zar\n\n"
+           "[wiiu]\nnombre = WII U\nprograma = emuladores\\cemu\\Cemu.exe\nargumentos = -f -g \"{rom}\"\n"
+           "carpeta = wiiu\nextensiones = wua,wud,wux,rpx\n\n"
+           "[ps3]\nnombre = PLAYSTATION 3\nprograma = emuladores\\rpcs3\\rpcs3.exe\nargumentos = --no-gui --fullscreen \"{rom}\"\n"
+           "carpeta = ps3\nextensiones = iso\ndentro = PS3_GAME\\USRDIR\\EBOOT.BIN\n\n"
            "[model3]\nnombre = SEGA MODEL 3\nnucleo = supermodel_libretro.dll\ncarpeta = model3\nextensiones = zip\n";
 }
 
@@ -563,13 +570,24 @@ void GameListModel::rescan()
                 if (!n.isEmpty() && !n.startsWith(u'#')) support.insert(n);
             }
         }
-        for (const QFileInfo &fi : dir.entryInfoList(filters, QDir::Files, QDir::Name)) {
-            if (biosSet().contains(fi.completeBaseName().toLower())) continue; // BIOS de MAME, etc.
-            if (support.contains(fi.completeBaseName().toLower())) continue;
+        // Cada juego: nombre (sin extensión) y archivo que se le pasa al emulador
+        QVector<QPair<QString, QString>> found;
+        if (!filters.isEmpty())
+            for (const QFileInfo &fi : dir.entryInfoList(filters, QDir::Files, QDir::Name))
+                found.append({ fi.completeBaseName(), fi.absoluteFilePath() });
+        // "dentro": el juego es una carpeta (PS3: <juego>/PS3_GAME/USRDIR/EBOOT.BIN)
+        if (!d.inside.isEmpty())
+            for (const QFileInfo &sub : dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name))
+                if (QFileInfo(sub.absoluteFilePath() + u'/' + d.inside).isFile())
+                    found.append({ sub.fileName(), sub.absoluteFilePath() + u'/' + d.inside });
+        for (const auto &entry : found) {
+            const QString base = entry.first;
+            if (biosSet().contains(base.toLower())) continue; // BIOS de MAME, etc.
+            if (support.contains(base.toLower())) continue;
             Game g;
-            g.rom = d.folder.toLower() + u'/' + fi.completeBaseName().toLower();
-            g.path = fi.absoluteFilePath();
-            g.title = fi.completeBaseName();
+            g.rom = d.folder.toLower() + u'/' + base.toLower();
+            g.path = entry.second;
+            g.title = base;
             g.system = d.name;
             g.core = d.core;
             const auto it = m_meta.constFind(g.rom); // títulos propios: "snes/mario|Super Mario World|1990|Nintendo"
@@ -579,7 +597,7 @@ void GameListModel::rescan()
                 g.parent = it->parent; // 6.º campo: "mame/padre" si es un clon (para ocultar repetidos)
                 g.players = it->players;
             }
-            g.key = (g.title + u' ' + fi.completeBaseName()).toLower();
+            g.key = (g.title + u' ' + base).toLower();
             m_all.push_back(g);
         }
     }

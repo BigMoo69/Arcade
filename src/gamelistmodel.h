@@ -93,7 +93,8 @@ private:
     // program/args: emulador aparte (programa externo) en vez de núcleo; entonces core = "@" + id
     // romDir: carpeta de juegos fuera del Arcade (clave "juegos"); vacía = roms/<carpeta>
     // relocate: archivos de configuración del emulador aparte que guardan rutas completas (clave "reubicar")
-    struct SystemDef { QString id, name, core, folder, program, args, romDir; QStringList exts, relocate; };
+    // inside: juegos que son carpetas (clave "dentro"): archivo que debe existir dentro de cada una
+    struct SystemDef { QString id, name, core, folder, program, args, romDir, inside; QStringList exts, relocate; };
     void loadSystemDefs();
     void writeDefaultSystems(const QString &file) const;
     QVector<SystemDef> m_defs;

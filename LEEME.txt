@@ -76,6 +76,11 @@ EMULADORES APARTE (Wii U, PS3, Xbox...)
   'programa' y 'juegos' pueden ser rutas relativas a la carpeta del Arcade: los emuladores aparte
   van en  emuladores\<nombre>\  (por ejemplo emuladores\xemu\xemu.exe) para que todo viaje junto.
   Xbox (xemu) necesita sus BIOS y su disco duro virtual en esa carpeta; no se incluyen.
+  Vienen definidos: Xbox (xemu), Xbox 360 (Xenia), Wii U (Cemu) y PlayStation 3 (RPCS3).
+  build_windows.bat los descarga a emuladores\ (o ejecuta extras\bajar_emuladores.ps1).
+  PS3: valen .iso y juegos en carpeta (roms\ps3\<juego>\PS3_GAME\USRDIR\EBOOT.BIN); RPCS3 pide
+  instalar antes el firmware oficial de PS3 desde su propio menú (File > Install Firmware).
+  Wii U: Cemu pide el archivo keys.txt para juegos cifrados (.wud/.wux).
   Al cerrar el emulador vuelves al menú; también se cierra
   manteniendo View+Menu (Select+Start) dos segundos. Dentro de ese emulador mandan sus propios
   controles y menús: la pausa, los guardados y los efectos del Arcade no se aplican.

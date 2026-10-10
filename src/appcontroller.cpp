@@ -511,10 +511,17 @@ void AppController::launchExternal(const QVariantMap &g)
     for (const QString &r : relocate) relocateConfig(QFileInfo(program).absolutePath(), r);
     const QString rom = QDir::toNativeSeparators(g.value(QStringLiteral("path")).toString());
     QStringList list = QProcess::splitCommand(args);
+    // {nombre}: el del archivo sin extensión o, si el juego es una carpeta, el de esa carpeta
+    // (con sus mayúsculas: el nombre interno del juego va todo en minúsculas)
+    const QString id = g.value(QStringLiteral("rom")).toString().section(u'/', -1);
+    QString name = QFileInfo(g.value(QStringLiteral("path")).toString()).completeBaseName();
+    for (const QString &part : g.value(QStringLiteral("path")).toString().split(u'/'))
+        if (part.compare(id, Qt::CaseInsensitive) == 0) name = part;
     bool used = false;
     for (QString &a : list) {
         used |= a.contains(QLatin1String("{rom}"));
         a.replace(QLatin1String("{rom}"), rom);
+        a.replace(QLatin1String("{nombre}"), name);
     }
     if (!used) list << rom; // sin {rom}: el juego va al final
 

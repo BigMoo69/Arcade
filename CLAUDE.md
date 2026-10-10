@@ -350,6 +350,16 @@ El usuario habla español; responde en español, conciso y directo.
     los emuladores son software libre (se pueden incluir con su licencia), pero BIOS, disco duro de
     Xbox y juegos tienen copyright: no deben ir en un paquete público. Falta que `build_windows.bat`
     baje los emuladores aparte (xemu, Xenia, y candidatos: Cemu, RPCS3, Vita3K).
+  - *Wii U, PS3 y descarga de emuladores aparte (2026-10-10):* `extras/bajar_emuladores.ps1` (lo llama
+    `build_windows.bat`; no el workflow) baja de GitHub Releases los que falten a `dist/emuladores/`:
+    xemu, Xenia (master), Cemu (crea `portable/`), RPCS3 (.7z con el `tar` de Windows) y Vita3K.
+    Ejecutado aquí: Cemu 2.6 (50 MB), RPCS3 0.0.43 (152 MB) y Vita3K (91 MB) instalados; xemu y Xenia
+    ya estaban. Sistemas por defecto `[wiiu]` (`-f -g "{rom}"`) y `[ps3]` (`--no-gui --fullscreen`).
+    Clave `dentro = <archivo>`: juegos que son carpetas (PS3: `PS3_GAME\USRDIR\EBOOT.BIN`); el
+    título es el nombre de la carpeta. Marcador `{nombre}` en `argumentos`. Probado con emulador
+    falso (lista y argumentos con espacios). **Ningún emulador real lanzado.** PS Vita sin sistema:
+    los juegos se instalan dentro de Vita3K (se lanzan por ID con `-r`), no son archivos; haría falta
+    listar `ux0/app` de su carpeta de datos. RPCS3 necesita el firmware de PS3 y Cemu `keys.txt`.
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

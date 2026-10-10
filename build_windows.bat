@@ -58,6 +58,10 @@ for %%c in (%CORES%) do (
     )
 )
 
+REM ---- Emuladores aparte (Xbox, Xbox 360, Wii U, PS3, PS Vita: no existen como nucleo) ----
+REM Van en dist\emuladores\<nombre>. Solo se bajan los que falten. No traen BIOS ni juegos.
+powershell -ExecutionPolicy Bypass -File extras\bajar_emuladores.ps1 -Destino dist\emuladores
+
 echo.
 echo ===== LISTO =====
 echo Tu arcade esta en: %CD%\dist

@@ -43,8 +43,12 @@ Window {
         for (var k = 0; k < cards.length; ++k) if (cards[k].id === Games.system) i = k
         home.index = i
         searchOpen = false
+        Games.search = "" // si no, la pantalla de sistemas abriría mostrando resultados
         homeOpen = true
     }
+    // Buscar desde la pantalla de sistemas: los resultados salen ahí mismo, sobre todos los juegos
+    readonly property bool homeSearching: homeOpen && (Games.search !== "" || searchOpen)
+    function homeSearchAll() { if (Games.system !== "") Games.system = "" }
     function enterSystem(id) {
         var src = Games.sourceRow(current)
         Games.search = ""
@@ -154,7 +158,11 @@ Window {
         else n = Math.max(0, Math.min(Games.count - 1, n))
         select(n)
     }
-    function select(i) { current = i; list.positionViewAtIndex(i, ListView.Contain) }
+    function select(i) {
+        current = i
+        list.positionViewAtIndex(i, ListView.Contain)
+        homeResults.positionViewAtIndex(i, ListView.Contain)
+    }
     function clickSfx() {}
 
     // ---------------- Sonidos y música del menú ----------------
@@ -236,7 +244,7 @@ Window {
             // Escribir en la pantalla de sistemas busca entre todos los juegos
             if (win.homeOpen && win.errorText === "" && !win.optionsOpen && !win.remapOpen && !Pad.capturing
                     && e.text.length === 1 && /[0-9a-zA-Z]/.test(e.text))
-                win.enterSystem("")
+                win.homeSearchAll()
             // Las letras y números no son atajos: en el menú escriben directo en la barra de búsqueda
             if (e.key === Qt.Key_F11) { App.fullscreen = !App.fullscreen; e.accepted = true; return }
             if ((e.key === Qt.Key_F2 || e.key === Qt.Key_Insert) && !Pad.capturing) { win.act("favorite"); e.accepted = true; return }
@@ -414,7 +422,12 @@ Window {
             // El preview de la derecha sigue visible y la lista de abajo se filtra mientras escribes.
             Rectangle {
                 id: search
-                anchors { top: searchBar.bottom; left: parent.left; right: parent.right; margins: 8 * u }
+                // En la lista va bajo su barra; en la pantalla de sistemas, bajo la barra de inicio
+                parent: win.homeOpen ? home : listPanel
+                x: win.homeOpen ? homeSearch.x : 8 * u
+                y: win.homeOpen ? homeSearch.y + homeSearch.height + 8 * u : searchBar.y + searchBar.height + 8 * u
+                width: win.homeOpen ? homeSearch.width : listPanel.width - 16 * u
+                z: 5
                 height: win.searchOpen ? keyCol.height + 16 * u : 0
                 visible: win.searchOpen
                 clip: true
@@ -446,8 +459,8 @@ Window {
                     else if (a === "search") win.searchOpen = false
                     else if (a === "pageUp") win.move(-1)      // LB/RB recorren los resultados sin cerrar
                     else if (a === "pageDown") win.move(1)
-                    else if (a === "systemPrev") win.changeSystem(-1)
-                    else if (a === "systemNext") win.changeSystem(1)
+                    else if (a === "systemPrev" && !win.homeOpen) win.changeSystem(-1)
+                    else if (a === "systemNext" && !win.homeOpen) win.changeSystem(1)
                 }
 
                 Column {
@@ -486,7 +499,8 @@ Window {
             // Encabezado de la tabla
             Rectangle {
                 id: tableHead
-                anchors { top: search.bottom; left: parent.left; right: parent.right; margins: 8 * u }
+                anchors { top: searchBar.bottom; left: parent.left; right: parent.right; margins: 8 * u
+                          topMargin: 16 * u + (win.homeOpen ? 0 : search.height) }
                 height: win.tableView ? 30 * u : 0
                 visible: win.tableView
                 color: "#30ffffff"; radius: 3 * u
@@ -762,6 +776,19 @@ Window {
                 return ""
             }
             function handle(a) {
+                if (win.homeSearching) { // resultados de la búsqueda: se recorren y se juega desde aquí
+                    if (a === "up") win.move(-1)
+                    else if (a === "down") win.move(1)
+                    else if (a === "left") win.move(-10)
+                    else if (a === "right") win.move(10)
+                    else if (a === "pageUp") win.select(Games.jumpLetter(win.current, -1))
+                    else if (a === "pageDown") win.select(Games.jumpLetter(win.current, 1))
+                    else if (a === "accept") { if (Games.count > 0) App.launch(win.current) }
+                    else if (a === "back") win.setSearch("") // un solo paso: vuelve a los sistemas
+                    else if (a === "favorite") win.toggleFavorite()
+                    else if (a === "search") { search.index = 0; win.searchOpen = true }
+                    return
+                }
                 var n = win.cards.length
                 if (n === 0) return
                 var c = cardGrid.cols, last = Math.floor((n - 1) / c) // última hilera
@@ -773,7 +800,7 @@ Window {
                 else if (a === "pageDown") index = Math.min(n - 1, index + c * cardGrid.rows)
                 else if (a === "accept") win.enterSystem(card.id)
                 else if (a === "back") win.optionsOpen = true
-                else if (a === "search") { win.enterSystem(""); search.index = 0; win.searchOpen = true }
+                else if (a === "search") { win.homeSearchAll(); win.select(0); search.index = 0; win.searchOpen = true }
             }
 
             Rectangle { anchors.fill: parent; color: "#b4000008" } // oscurece el fondo del tema para que se lea
@@ -791,7 +818,8 @@ Window {
                 id: homeSearch
                 anchors { top: parent.top; topMargin: 16 * u; horizontalCenter: parent.horizontalCenter }
                 width: Math.min(parent.width - 88 * u, 900 * u); height: 46 * u; radius: 23 * u
-                color: "#c0000000"; border.color: homeSearchArea.containsMouse ? win.cAccent : win.cBorder; border.width: 2 * u
+                color: "#c0000000"; border.width: 2 * u
+                border.color: win.homeSearching || homeSearchArea.containsMouse ? win.cAccent : win.cBorder
                 Item {
                     id: homeLens
                     anchors.verticalCenter: parent.verticalCenter; x: 18 * u
@@ -803,16 +831,96 @@ Window {
                 Text {
                     anchors { verticalCenter: parent.verticalCenter; left: homeLens.right; leftMargin: 10 * u; right: homeSearchKey.left; rightMargin: 8 * u }
                     elide: Text.ElideRight
-                    text: "ESCRIBE PARA BUSCAR UN JUEGO EN TODOS LOS SISTEMAS…"
-                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 18 * u
+                    text: win.homeSearching ? Games.search + (homeBlink.on ? "_" : " ")
+                                            : "ESCRIBE PARA BUSCAR UN JUEGO EN TODOS LOS SISTEMAS…"
+                    color: win.homeSearching ? "white" : win.cDim
+                    font.family: arcadeFont; font.pixelSize: 18 * u; font.bold: Games.search !== ""
                 }
-                Text {
-                    id: homeSearchKey
-                    anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 18 * u }
-                    text: "Ⓧ/□"
-                    color: win.cAccent; font.family: arcadeFont; font.pixelSize: 16 * u; font.bold: true
-                }
+                Timer { id: homeBlink; property bool on: true; interval: 450; repeat: true; running: win.homeSearching; onTriggered: on = !on }
                 MouseArea { id: homeSearchArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.act("search") }
+                Item {
+                    id: homeSearchKey
+                    anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 10 * u }
+                    width: 44 * u; height: 30 * u
+                    Text {
+                        anchors.centerIn: parent; visible: Games.search === ""
+                        text: "Ⓧ/□"
+                        color: win.cAccent; font.family: arcadeFont; font.pixelSize: 16 * u; font.bold: true
+                    }
+                    Rectangle { // limpiar la búsqueda = volver a los sistemas
+                        anchors.centerIn: parent; visible: Games.search !== ""
+                        width: 30 * u; height: 30 * u; radius: 15 * u; color: win.cAccent2
+                        Text { anchors.centerIn: parent; text: "✕"; color: "white"; font.pixelSize: 16 * u; font.bold: true }
+                        MouseArea { anchors.fill: parent; onClicked: { win.searchOpen = false; win.setSearch("") } }
+                    }
+                }
+            }
+            // Resultados de la búsqueda, en el lugar de la cuadrícula
+            ListView {
+                id: homeResults
+                visible: win.homeSearching
+                anchors { top: homeSearch.bottom; topMargin: 12 * u + (win.searchOpen ? search.height + 8 * u : 0)
+                          bottom: homeInfo.top; bottomMargin: 10 * u; horizontalCenter: parent.horizontalCenter }
+                width: homeSearch.width
+                clip: true
+                model: win.homeOpen ? Games : null
+                currentIndex: win.current
+                interactive: false
+                highlightMoveDuration: 60
+                preferredHighlightBegin: height * 0.3
+                preferredHighlightEnd: height * 0.7
+                highlightRangeMode: ListView.ApplyRange
+                highlight: Rectangle { color: win.cAccent; radius: 4 * u }
+                delegate: Item {
+                    width: ListView.view.width; height: 62 * u
+                    readonly property bool sel: index === win.current
+                    Rectangle {
+                        id: resThumb
+                        anchors.verticalCenter: parent.verticalCenter; x: 8 * u
+                        width: 72 * u; height: 54 * u; color: "black"
+                        border.color: sel ? "white" : win.cBorder; border.width: 1 * u
+                        Image {
+                            anchors.fill: parent; anchors.margins: 1 * u
+                            source: win.homeSearching ? image : ""
+                            asynchronous: true; cache: false
+                            sourceSize.width: 160; sourceSize.height: 120
+                            fillMode: Image.PreserveAspectFit
+                        }
+                    }
+                    Text {
+                        id: resMark
+                        anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 12 * u }
+                        text: (favorite ? "★ " : "") + (status > 0 ? "✔" : status < 0 ? "✘" : "")
+                        font.pixelSize: 18 * u; font.bold: true
+                        color: sel ? win.cOnAccent : status < 0 ? "#ff4050" : "#40e070"
+                    }
+                    Text {
+                        id: resSys
+                        anchors { verticalCenter: parent.verticalCenter; right: resMark.left; rightMargin: 12 * u }
+                        width: 250 * u; horizontalAlignment: Text.AlignRight; elide: Text.ElideRight
+                        text: system + (year !== "" ? "  ·  " + year : "")
+                        font.family: arcadeFont; font.pixelSize: 15 * u
+                        color: sel ? win.cOnAccent : win.cDim
+                    }
+                    Text {
+                        anchors { verticalCenter: parent.verticalCenter; left: resThumb.right; leftMargin: 12 * u; right: resSys.left; rightMargin: 8 * u }
+                        elide: Text.ElideRight
+                        text: title
+                        font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: sel
+                        color: sel ? win.cOnAccent : win.cText
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: win.select(index)
+                        onDoubleClicked: { win.select(index); win.act("accept") }
+                        onWheel: (w) => win.move(w.angleDelta.y > 0 ? -1 : 1)
+                    }
+                }
+            }
+            Text {
+                anchors.centerIn: homeResults; visible: win.homeSearching && Games.count === 0
+                text: "SIN RESULTADOS"
+                font.family: arcadeFont; font.pixelSize: 22 * u; color: win.cDim
             }
             // Cuadrícula de sistemas: se recorre en las cuatro direcciones; la tarjeta elegida "salta"
             // (crece, se ilumina y queda por encima de las vecinas)
@@ -827,6 +935,7 @@ Window {
                 cellWidth: width / cols
                 cellHeight: cellWidth * 0.74
                 clip: true
+                visible: !win.homeSearching
                 model: win.cards.length
                 currentIndex: home.index
                 interactive: false
@@ -929,7 +1038,7 @@ Window {
             Rectangle {
                 anchors { right: parent.right; rightMargin: 16 * u; top: cardGrid.top; bottom: cardGrid.bottom; topMargin: 26 * u; bottomMargin: 26 * u }
                 width: 6 * u; radius: 3 * u; color: "#40ffffff"
-                visible: cardGrid.visibleArea.heightRatio < 0.999
+                visible: !win.homeSearching && cardGrid.visibleArea.heightRatio < 0.999
                 Rectangle {
                     width: parent.width; radius: parent.radius; color: win.cAccent
                     y: Math.max(0, Math.min(1, cardGrid.visibleArea.yPosition)) * parent.height
@@ -942,13 +1051,15 @@ Window {
                 spacing: 2 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: home.card ? home.card.name + "   ·   " + (home.index + 1) + " / " + win.cards.length : ""
+                    text: win.homeSearching ? Games.count + (Games.count === 1 ? " RESULTADO" : " RESULTADOS")
+                          : home.card ? home.card.name + "   ·   " + (home.index + 1) + " / " + win.cards.length : ""
                     color: "white"; style: Text.Outline; styleColor: "black"
                     font.family: arcadeFont; font.pixelSize: 28 * u; font.bold: true
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: !home.card ? "" : home.card.count > 0 ? "Ⓐ / ENTER PARA ENTRAR"
+                    text: win.homeSearching ? "Ⓐ / ENTER JUGAR   ·   Ⓑ / ESC VOLVER A LOS SISTEMAS"
+                          : !home.card ? "" : home.card.count > 0 ? "Ⓐ / ENTER PARA ENTRAR"
                           : home.card.folder !== "" ? "COPIA SUS JUEGOS EN  roms\\" + home.card.folder
                           : home.card.id.indexOf("FAVORITOS") >= 0 ? "MARCA JUEGOS CON Ⓨ/△ O F2 PARA VERLOS AQUÍ" : "AQUÍ SALDRÁN LOS ÚLTIMOS JUEGOS QUE ABRAS"
                     color: win.cDim; font.family: arcadeFont; font.pixelSize: 17 * u

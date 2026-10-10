@@ -313,6 +313,11 @@ El usuario habla español; responde en español, conciso y directo.
   - *Barra de búsqueda en la pantalla de sistemas (2026-10-09):* `homeSearch` sobre la cuadrícula; clic
     o Ⓧ/□ = `win.act("search")` (pasa a TODOS con el teclado en pantalla) y escribir con el teclado
     busca directo, como antes. Probada offscreen (clic y `type:`).
+    **Cambiado después:** la búsqueda ya no sale de la pantalla de sistemas. `win.homeSearching`
+    (inicio + texto o teclado abierto) oculta la cuadrícula y muestra `homeResults` (miniatura, título,
+    sistema, año) sobre todos los juegos; Ⓐ/Enter juega desde ahí y Ⓑ/Esc limpia y vuelve a los sistemas
+    de un solo paso. El teclado en pantalla (`search`) cambia de padre (`home` / `listPanel`) con
+    posición explícita en vez de anclas. `goHome()` limpia la búsqueda.
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

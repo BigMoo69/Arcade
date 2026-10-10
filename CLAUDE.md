@@ -237,7 +237,37 @@ El usuario habla español; responde en español, conciso y directo.
     (sin eso FBNeo tumbaba el programa al cargar). `hiscore.dat` (328 KB, de `libretro/FBNeo`
     `metadata/`; el repo `finalburnneo/FBNeo` no lo trae) está en `dist/system/fbneo/`; los récords
     se guardan en `saves/fbneo/<rom>.hi` (probado con 1942). NeoGeo usa su propia memoria (`.fs`).
-  - **Pendiente de la lista de RetroArch:** mapeo por juego, run-ahead, núcleos con OpenGL.
+  - *Ajustes por juego (2026-10-09):* pausa → AJUSTES → "SOLO PARA ESTE JUEGO". Con `m_gameScope`,
+    `AppController::videoValue/setVideoValue` y `loadMaps/saveMaps` leen y escriben imagen (crt, aspect,
+    scanlines, smooth, bezel) y controles (mapas de mando y teclas) en `juegos.ini`, grupo = rom con `/`
+    cambiado por `|` y clave `propio=true`; al salir del juego vuelven los generales. El volumen y las
+    opciones del emulador siguen siendo generales. La pausa tiene dos niveles (`pauseMenu.settings`) y
+    CONTROLES también se abre desde ahí (`remap` visible en pausa).
+  - *Sticks analógicos:* `Gamepad::analog()` responde a `RETRO_DEVICE_ANALOG` (zona muerta 3500); el
+    izquierdo sigue contando como cruceta. *Cambio de disco:* `SET_DISK_CONTROL_INTERFACE` →
+    `LibretroCore::nextDisk()`; la pausa muestra "CAMBIAR DE DISCO" si hay más de uno. **Ninguno de los
+    dos se ha probado** (hace falta mando y un juego de PlayStation de varios discos).
+  - *Núcleos con OpenGL (2026-10-09):* `SET_HW_RENDER` (solo `OPENGL` y `OPENGL_CORE`; GLES/Vulkan se
+    rechazan). `LibretroCore::createGl()` crea un `QOpenGLContext` + `QOffscreenSurface` + FBO propios
+    tras `load_game`; cada cuadro (`RETRO_HW_FRAME_BUFFER_VALID`) se lee con `glReadPixels` a `m_frame`
+    (`readHwFrame`, invierte filas si `bottom_left_origin`), así el resto (CRT, capturas, miniaturas)
+    no cambia. `glCurrent()` antes de run/reset/serialize; `context_destroy` antes de `unload_game`.
+    Probado con `tests/testgl_core.cpp` (núcleo de prueba, objetivo CMake `testgl_libretro`, no se
+    compila por defecto) usando `--test-hidden`: la plataforma offscreen de Qt no tiene OpenGL.
+    Núcleos añadidos: `flycast` (sistemas `[dreamcast]` y `[naomi]`) y `mupen64plus_next` (`[n64]`);
+    los 11 cargan con `--core-info`. **Ningún juego real probado**: faltan ROMs y BIOS (Flycast los busca
+    en `system/dc/`). Leer cada cuadro de vuelta cuesta rendimiento a resoluciones altas.
+  - *Pantalla de sistemas (2026-10-09), estilo Pegasus:* el Arcade arranca en `home` (`win.homeOpen`),
+    una fila de tarjetas: TODOS, FAVORITOS, RECIENTES y cada sistema, **también los de `sistemas.ini`
+    sin juegos** ("SIN JUEGOS AÚN" + carpeta donde copiarlos). `GameListModel::systemCards()` da nombre,
+    id, cuenta y hasta 4 capturas para el mosaico; si existe `media/sistemas/<nombre en minúsculas, solo
+    letras y números>.png` se usa como imagen (p. ej. `neogeo.png`, `cps1.png`). Ⓐ entra a la lista
+    (`enterSystem`), Ⓑ en la lista vuelve a sistemas (`goHome`) y Ⓑ en sistemas abre Opciones (también
+    F1 o el pie). Escribir en la pantalla de sistemas busca en todos. `ui/lastSystem` recuerda la lista.
+    En las pruebas `--test-actions` hay que dar `accept` para entrar a la lista antes de navegar juegos
+    (`launch:` funciona igual desde cualquier pantalla).
+  - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
+    mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`
     y `roms/favoritos.txt` (no borrarlos: el usuario usa el Arcade entre prueba y prueba), o usar una
     base aparte con `ARCADE_DIR`.

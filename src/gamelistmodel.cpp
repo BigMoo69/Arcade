@@ -21,6 +21,9 @@ static const QSet<QString> &biosSet()
         QStringLiteral("namcoc69"), QStringLiteral("namcoc70"), QStringLiteral("namcoc75"),
         QStringLiteral("bubsys"), QStringLiteral("midssio"), QStringLiteral("coleco"),
         QStringLiteral("spectrum"), QStringLiteral("msx"), QStringLiteral("hiscore"),
+        // BIOS de Naomi / Atomiswave (Flycast)
+        QStringLiteral("naomi"), QStringLiteral("naomi2"), QStringLiteral("naomigd"), QStringLiteral("awbios"),
+        QStringLiteral("hod2bios"), QStringLiteral("f355bios"), QStringLiteral("f355dlx"), QStringLiteral("airlbios"),
     };
     return s;
 }
@@ -144,7 +147,7 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "; Cada bloque de abajo es otro sistema: sus juegos van en roms/<carpeta>/ y los corre el nucleo\n"
            "; libretro indicado, que debe estar en esta carpeta cores/. Si el nucleo no esta, el juego\n"
            "; aparece en la lista pero avisa al intentar abrirlo.\n"
-           "; Solo sirven nucleos que dibujan por software (no los que necesitan OpenGL/Vulkan).\n"
+           "; Sirven los nucleos que dibujan por software o con OpenGL (no los que exigen Vulkan).\n"
            "; Para agregar un sistema copia un bloque y cambia los cuatro valores.\n"
            "\n"
            "[nes]\nnombre = NINTENDO NES\nnucleo = fceumm_libretro.dll\ncarpeta = nes\nextensiones = nes,zip\n\n"
@@ -155,7 +158,10 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "[gba]\nnombre = GAME BOY ADVANCE\nnucleo = mgba_libretro.dll\ncarpeta = gba\nextensiones = gba,zip\n\n"
            "[pcengine]\nnombre = PC ENGINE\nnucleo = mednafen_pce_fast_libretro.dll\ncarpeta = pcengine\nextensiones = pce,cue,chd,zip\n\n"
            "[psx]\nnombre = PLAYSTATION\nnucleo = pcsx_rearmed_libretro.dll\ncarpeta = psx\nextensiones = cue,chd,pbp,m3u\n\n"
-           "[mame]\nnombre = MAME\nnucleo = mame2003_plus_libretro.dll\ncarpeta = mame\nextensiones = zip\n";
+           "[mame]\nnombre = MAME\nnucleo = mame2003_plus_libretro.dll\ncarpeta = mame\nextensiones = zip\n\n"
+           "[dreamcast]\nnombre = DREAMCAST\nnucleo = flycast_libretro.dll\ncarpeta = dreamcast\nextensiones = cdi,gdi,chd,cue,m3u\n\n"
+           "[naomi]\nnombre = NAOMI / ATOMISWAVE\nnucleo = flycast_libretro.dll\ncarpeta = naomi\nextensiones = zip,7z,lst\n\n"
+           "[n64]\nnombre = NINTENDO 64\nnucleo = mupen64plus_next_libretro.dll\ncarpeta = n64\nextensiones = n64,z64,v64,zip\n";
 }
 
 void GameListModel::loadStatus()
@@ -333,6 +339,55 @@ void GameListModel::cycleSystem(int direction)
     const int cur = m_system.isEmpty() ? 0 : int(m_systems.indexOf(m_system)) + 1;
     const int next = ((cur + (direction < 0 ? -1 : 1)) % n + n) % n;
     setSystem(next == 0 ? QString() : m_systems.at(next - 1));
+}
+
+QVariantList GameListModel::systemCards() const
+{
+    struct Acc { int count = 0, tries = 0; QStringList images; };
+    const QStringList imgDirs{ QStringLiteral("snaps/"), QStringLiteral("titles/") };
+    const QStringList imgExts{ QStringLiteral(".png"), QStringLiteral(".jpg"), QStringLiteral(".jpeg"), QStringLiteral(".bmp") };
+    // Unas pocas capturas por tarjeta; se deja de buscar pronto para no consultar el disco miles de veces
+    auto add = [&](Acc &a, const Game &g, int step) {
+        if (a.count++ % step != 0 || a.images.size() >= 4 || a.tries >= 16) return;
+        ++a.tries;
+        const QString url = mediaFile(g.rom, imgDirs, imgExts);
+        if (!url.isEmpty()) a.images << url;
+    };
+    Acc all, favs, recents;
+    QHash<QString, Acc> bySystem;
+    for (const Game &g : m_all) {
+        if (m_hideBroken && m_status.value(g.rom, 0) < 0) continue;
+        if (m_favs.contains(g.rom)) add(favs, g, 1);
+        if (m_stats.value(g.rom).last > 0) add(recents, g, 1);
+        if (m_hideClones && g.duplicate) continue;
+        add(all, g, 97); // salteadas, para que "todos" no enseñe solo los que empiezan por números
+        add(bySystem[g.system], g, 1);
+    }
+    recents.count = qMin(recents.count, 30);
+
+    QHash<QString, QString> folders; // sistema -> carpeta dentro de roms/
+    QStringList names = bySystem.keys();
+    for (const SystemDef &d : m_defs) {
+        folders.insert(d.name, d.folder);
+        if (!names.contains(d.name)) names << d.name; // definido pero todavía sin juegos
+    }
+    std::sort(names.begin(), names.end(), [](const QString &a, const QString &b) { return QString::compare(a, b, Qt::CaseInsensitive) < 0; });
+
+    auto card = [this](const QString &name, const QString &id, const Acc &a, const QString &folder) {
+        QString slug;
+        for (const QChar c : name.toLower()) if (c.isLetterOrNumber() && c.unicode() < 128) slug += c;
+        return QVariantMap{ { QStringLiteral("name"), name }, { QStringLiteral("id"), id },
+                            { QStringLiteral("count"), a.count }, { QStringLiteral("images"), a.images },
+                            { QStringLiteral("folder"), folder },
+                            { QStringLiteral("logo"), mediaFile(slug, { QStringLiteral("sistemas/") },
+                                                                { QStringLiteral(".png"), QStringLiteral(".jpg") }) } };
+    };
+    QVariantList out;
+    out << card(QStringLiteral("TODOS LOS JUEGOS"), QString(), all, QString());
+    out << card(QStringLiteral("FAVORITOS"), favoritesName(), favs, QString());
+    out << card(QStringLiteral("RECIENTES"), recentsName(), recents, QString());
+    for (const QString &n : names) out << card(n, n, bySystem.value(n), folders.value(n));
+    return out;
 }
 
 // Recalcula m_view: sistema exacto y todas las palabras de la búsqueda en el título o el nombre del zip

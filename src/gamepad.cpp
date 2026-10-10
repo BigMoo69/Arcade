@@ -303,7 +303,7 @@ void Gamepad::pumpEvents()
 void Gamepad::updatePadState()
 {
     for (Pad &p : m_pads) {
-        if (!p.ctrl) { p.buttons = p.menu = p.phys = 0; p.guide = p.pause = p.rewind = p.fast = false; continue; }
+        if (!p.ctrl) { p.buttons = p.menu = p.phys = 0; p.guide = p.pause = p.rewind = p.fast = false; p.axes = {}; continue; }
         SDL_GameController *c = p.ctrl;
         auto btn = [c](SDL_GameControllerButton b) { return SDL_GameControllerGetButton(c, b) != 0; };
         auto ax  = [c](SDL_GameControllerAxis a)   { return int(SDL_GameControllerGetAxis(c, a)); };
@@ -330,6 +330,7 @@ void Gamepad::updatePadState()
         if (btn(SDL_CONTROLLER_BUTTON_DPAD_LEFT)  || lx < -kStickThreshold) m |= bit(RETRO_DEVICE_ID_JOYPAD_LEFT);
         if (btn(SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || lx >  kStickThreshold) m |= bit(RETRO_DEVICE_ID_JOYPAD_RIGHT);
 
+        p.axes = { qint16(lx), qint16(ly), qint16(ax(SDL_CONTROLLER_AXIS_RIGHTX)), qint16(ax(SDL_CONTROLLER_AXIS_RIGHTY)) };
         bool pause = false;
         p.phys = ph;
         p.menu = m | applyMap(ph, kDefaultMap, nullptr, true);
@@ -379,6 +380,13 @@ bool Gamepad::retroButton(int port, unsigned retroId) const
     uint16_t mask = m_pads[size_t(port)].buttons;
     if (port < 2) mask |= m_keyboard[size_t(port)];
     return (mask >> retroId) & 1;
+}
+
+qint16 Gamepad::analog(int port, unsigned stick, unsigned axis) const
+{
+    if (port < 0 || port >= MaxPlayers || stick > 1 || axis > 1) return 0;
+    const qint16 v = m_pads[size_t(port)].axes[stick * 2 + axis];
+    return qAbs(int(v)) < 3500 ? qint16(0) : v; // zona muerta: el stick en reposo nunca da cero exacto
 }
 
 void Gamepad::setRumble(int port, bool strongMotor, quint16 strength)

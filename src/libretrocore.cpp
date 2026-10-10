@@ -12,6 +12,12 @@
 #include <QDirIterator>
 #include <QProcess>
 #include <QTransform>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
+#include <QOpenGLFramebufferObject>
+#include <QOffscreenSurface>
+#include <QSurfaceFormat>
+#include <vector>
 #include <cstdarg>
 #include <cstring>
 #include <cstdio>
@@ -57,6 +63,7 @@ void LibretroCore::unloadCore()
     m_vars.clear();
     m_optDefs.clear();
     m_corePath.clear();
+    m_disk = {};
 }
 
 template <typename T>
@@ -157,6 +164,7 @@ bool LibretroCore::loadGame(const QString &romPath)
     m_rotation = 0;
     m_pixFmt = RETRO_PIXEL_FORMAT_0RGB1555;
     m_frame = QImage();
+    m_hw = {}; // el núcleo lo vuelve a pedir en load_game si dibuja con OpenGL
 
     m_loadProblems.clear();
     m_driverStarted = false;
@@ -181,6 +189,13 @@ bool LibretroCore::loadGame(const QString &romPath)
         m_api.set_controller_port_device(p, RETRO_DEVICE_JOYPAD);
 
     m_api.get_system_av_info(&m_av);
+    if (m_hw.context_reset && !createGl()) {
+        m_api.unload_game();
+        m_romData.clear();
+        m_error = QStringLiteral("Este emulador dibuja con OpenGL y no se pudo crear el contexto gráfico.\n\n"
+                                 "Actualiza el controlador de la tarjeta de video.");
+        return false;
+    }
     m_gameLoaded = true;
 
     startAudio(m_av.timing.sample_rate > 0 ? m_av.timing.sample_rate : 48000.0);
@@ -197,7 +212,12 @@ void LibretroCore::unloadGame()
     m_timer.stop();
     stopAudio();
     saveSram();
+    if (m_hwActive) { // el núcleo libera sus recursos gráficos con el contexto todavía activo
+        glCurrent();
+        if (m_hw.context_destroy) m_hw.context_destroy();
+    }
     m_api.unload_game();
+    destroyGl();
     m_gameLoaded = false;
     m_fast = false;
     m_rewind.clear();
@@ -276,6 +296,29 @@ void LibretroCore::setFastForward(bool on)
     m_nextFrameMs = double(m_clock.nsecsElapsed()) / 1e6;
 }
 
+int LibretroCore::diskCount() const
+{
+    return m_gameLoaded && m_disk.get_num_images ? int(m_disk.get_num_images()) : 0;
+}
+
+int LibretroCore::diskIndex() const
+{
+    return m_gameLoaded && m_disk.get_image_index ? int(m_disk.get_image_index()) : 0;
+}
+
+// Como en una consola: abrir la tapa, poner el disco siguiente y cerrarla
+bool LibretroCore::nextDisk()
+{
+    const int n = diskCount();
+    if (n < 2 || !m_disk.set_eject_state || !m_disk.set_image_index) return false;
+    const unsigned next = unsigned(diskIndex() + 1) % unsigned(n);
+    m_disk.set_eject_state(true);
+    const bool ok = m_disk.set_image_index(next);
+    m_disk.set_eject_state(false);
+    m_rewind.clear(); // los estados guardados eran del otro disco
+    return ok;
+}
+
 void LibretroCore::setRewindEnabled(bool on)
 {
     m_rewindOn = on;
@@ -284,8 +327,104 @@ void LibretroCore::setRewindEnabled(bool on)
 
 // Un cuadro de emulación. Normal: corre y cada 6 cuadros guarda un estado (unos 60 s de historia,
 // con tope de 256 MB). Rebobinando: cada 2 cuadros carga el estado anterior y lo dibuja (~3x hacia atrás).
+// ---------------------------------------------------------------- OpenGL para núcleos 3D
+
+bool LibretroCore::createGl()
+{
+    QSurfaceFormat fmt;
+    fmt.setRenderableType(QSurfaceFormat::OpenGL);
+    fmt.setDepthBufferSize(24);
+    fmt.setStencilBufferSize(8);
+    if (m_hw.context_type == RETRO_HW_CONTEXT_OPENGL_CORE) {
+        fmt.setVersion(int(m_hw.version_major ? m_hw.version_major : 3), int(m_hw.version_major ? m_hw.version_minor : 3));
+        fmt.setProfile(QSurfaceFormat::CoreProfile);
+    } else { // OpenGL "clásico": perfil de compatibilidad, la versión más alta que dé el controlador
+        fmt.setVersion(4, 5);
+        fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
+    }
+    m_gl = new QOpenGLContext;
+    m_gl->setFormat(fmt);
+    if (!m_gl->create()) { // segundo intento: lo que el sistema ofrezca por defecto
+        m_gl->setFormat(QSurfaceFormat());
+        if (!m_gl->create()) { destroyGl(); return false; }
+    }
+    m_glSurface = new QOffscreenSurface;
+    m_glSurface->setFormat(m_gl->format());
+    m_glSurface->create();
+    if (!m_glSurface->isValid() || !m_gl->makeCurrent(m_glSurface)) { destroyGl(); return false; }
+    m_hwActive = true;
+    if (!ensureFbo(int(qMax(m_av.geometry.max_width, m_av.geometry.base_width)),
+                   int(qMax(m_av.geometry.max_height, m_av.geometry.base_height)))) { destroyGl(); return false; }
+    m_hw.context_reset();
+    return true;
+}
+
+// El framebuffer donde dibuja el núcleo; crece si el juego pide una resolución mayor
+bool LibretroCore::ensureFbo(int w, int h)
+{
+    if (!m_hwActive) return false;
+    w = qBound(64, w, 8192); h = qBound(64, h, 8192);
+    if (m_fbo && m_fbo->width() >= w && m_fbo->height() >= h) return true;
+    glCurrent();
+    delete m_fbo;
+    QOpenGLFramebufferObjectFormat ff;
+    ff.setAttachment(m_hw.depth ? QOpenGLFramebufferObject::CombinedDepthStencil : QOpenGLFramebufferObject::NoAttachment);
+    m_fbo = new QOpenGLFramebufferObject(w, h, ff);
+    return m_fbo->isValid();
+}
+
+void LibretroCore::glCurrent()
+{
+    if (m_hwActive && m_gl && QOpenGLContext::currentContext() != m_gl) m_gl->makeCurrent(m_glSurface);
+}
+
+void LibretroCore::destroyGl()
+{
+    if (m_gl && m_glSurface && m_glSurface->isValid()) m_gl->makeCurrent(m_glSurface);
+    delete m_fbo; m_fbo = nullptr;
+    if (m_gl) m_gl->doneCurrent();
+    delete m_gl; m_gl = nullptr;
+    delete m_glSurface; m_glSurface = nullptr;
+    m_hwActive = false;
+}
+
+// Copia a m_frame lo que el núcleo dibujó. OpenGL entrega las filas de abajo arriba: se invierten
+// salvo que el núcleo ya dibuje con el origen arriba (bottom_left_origin = false).
+void LibretroCore::readHwFrame(unsigned w, unsigned h)
+{
+    if (!m_hwActive || !m_fbo) return;
+    glCurrent();
+    w = qMin(w, unsigned(m_fbo->width()));
+    h = qMin(h, unsigned(m_fbo->height()));
+    QOpenGLFunctions *f = m_gl->functions();
+    f->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo->handle());
+    f->glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    QImage img(int(w), int(h), QImage::Format_RGBX8888);
+    if (m_hw.bottom_left_origin) {
+        std::vector<uchar> buf(size_t(w) * h * 4);
+        f->glReadPixels(0, 0, int(w), int(h), GL_RGBA, GL_UNSIGNED_BYTE, buf.data());
+        for (unsigned y = 0; y < h; ++y)
+            memcpy(img.scanLine(int(y)), buf.data() + size_t(h - 1 - y) * w * 4, size_t(w) * 4);
+    } else {
+        f->glReadPixels(0, 0, int(w), int(h), GL_RGBA, GL_UNSIGNED_BYTE, img.bits());
+    }
+    m_frame = img;
+}
+
+uintptr_t LibretroCore::cbGetFramebuffer()
+{
+    return s_self && s_self->m_fbo ? uintptr_t(s_self->m_fbo->handle()) : 0;
+}
+
+retro_proc_address_t LibretroCore::cbGetProcAddress(const char *sym)
+{
+    if (!s_self || !s_self->m_gl) return nullptr;
+    return reinterpret_cast<retro_proc_address_t>(s_self->m_gl->getProcAddress(sym));
+}
+
 void LibretroCore::runFrame()
 {
+    glCurrent();
     if (m_rewinding) {
         if (++m_rewindCounter % 2 == 0 && !m_rewind.empty()) {
             const QByteArray &st = m_rewind.back();
@@ -350,12 +489,14 @@ bool LibretroCore::setOption(const QByteArray &key, const QByteArray &value)
 
 void LibretroCore::reset()
 {
+    glCurrent();
     if (m_gameLoaded) m_api.reset();
 }
 
 bool LibretroCore::saveState(const QString &path)
 {
     if (!m_gameLoaded) return false;
+    glCurrent();
     const size_t sz = m_api.serialize_size();
     if (sz == 0) return false;
     QByteArray buf(qsizetype(sz), Qt::Uninitialized);
@@ -369,6 +510,7 @@ bool LibretroCore::saveState(const QString &path)
 bool LibretroCore::loadState(const QString &path)
 {
     if (!m_gameLoaded) return false;
+    glCurrent();
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) return false;
     const QByteArray buf = f.readAll();
@@ -496,16 +638,40 @@ bool LibretroCore::environment(unsigned cmd, void *data)
     case RETRO_ENVIRONMENT_SET_GEOMETRY: {
         const auto *g = static_cast<const retro_game_geometry *>(data);
         m_av.geometry = *g;
+        ensureFbo(int(qMax(g->max_width, g->base_width)), int(qMax(g->max_height, g->base_height)));
         return true;
     }
     case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
         m_av = *static_cast<const retro_system_av_info *>(data);
+        ensureFbo(int(qMax(m_av.geometry.max_width, m_av.geometry.base_width)),
+                  int(qMax(m_av.geometry.max_height, m_av.geometry.base_height)));
         if (m_gameLoaded) startAudio(m_av.timing.sample_rate);
         return true;
     }
 
     case RETRO_ENVIRONMENT_GET_CAN_DUPE:
         *static_cast<bool *>(data) = true;
+        return true;
+
+    // ---- Render por hardware: solo OpenGL de escritorio ----
+    case RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER:
+        if (data) *static_cast<unsigned *>(data) = RETRO_HW_CONTEXT_OPENGL;
+        return true;
+    case RETRO_ENVIRONMENT_SET_HW_RENDER: {
+        auto *cb = static_cast<retro_hw_render_callback *>(data);
+        if (!cb) return false;
+        if (cb->context_type != RETRO_HW_CONTEXT_OPENGL && cb->context_type != RETRO_HW_CONTEXT_OPENGL_CORE)
+            return false; // GLES, Vulkan o Direct3D: el núcleo suele reintentar con OpenGL
+        cb->get_current_framebuffer = &LibretroCore::cbGetFramebuffer;
+        cb->get_proc_address = &LibretroCore::cbGetProcAddress;
+        m_hw = *cb;
+        return true;
+    }
+    case RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT:
+        return true;
+
+    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
+        if (data) m_disk = *static_cast<const retro_disk_control_callback *>(data);
         return true;
 
     case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
@@ -587,6 +753,11 @@ bool LibretroCore::environment(unsigned cmd, void *data)
 void LibretroCore::cbVideo(const void *data, unsigned w, unsigned h, size_t pitch)
 {
     LibretroCore *self = s_self;
+    if (self && data == RETRO_HW_FRAME_BUFFER_VALID && w && h) { // el núcleo dibujó con OpenGL
+        self->readHwFrame(w, h);
+        emit self->frameReady();
+        return;
+    }
     if (!self || !data || w == 0 || h == 0) {
         if (self) emit self->frameReady(); // cuadro duplicado: se repinta el anterior
         return;
@@ -634,8 +805,11 @@ void LibretroCore::cbInputPoll()
 
 int16_t LibretroCore::cbInputState(unsigned port, unsigned device, unsigned index, unsigned id)
 {
-    Q_UNUSED(index);
     if (!s_self || !s_self->m_pad) return 0;
+    if ((device & RETRO_DEVICE_MASK) == RETRO_DEVICE_ANALOG) {
+        if (index > RETRO_DEVICE_INDEX_ANALOG_RIGHT) return 0; // botones analógicos: no hay
+        return s_self->m_pad->analog(int(port), index, id);
+    }
     if ((device & RETRO_DEVICE_MASK) != RETRO_DEVICE_JOYPAD) return 0;
     return s_self->m_pad->retroButton(int(port), id) ? 1 : 0;
 }

@@ -62,6 +62,10 @@ public:
     void notePlayed(const QString &rom, qint64 seconds);
     // Pasa al sistema siguiente/anterior: todos → primero → … → último → todos
     Q_INVOKABLE void cycleSystem(int direction);
+    // Tarjetas de la pantalla de sistemas: todos, favoritos, recientes y cada sistema (también los
+    // definidos en sistemas.ini que aún no tienen juegos). Cada una: { name, id (valor para "system"),
+    // count, images (hasta 4 capturas de sus juegos), logo (media/sistemas/<nombre>.png si existe), folder }.
+    Q_INVOKABLE QVariantList systemCards() const;
 
     Q_INVOKABLE QVariantMap get(int row) const;
     // Fila visible ↔ posición en la lista completa (para conservar la selección al cambiar el filtro)

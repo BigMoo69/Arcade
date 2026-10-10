@@ -90,7 +90,8 @@ QString AppController::musicUrl() const
 AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad *pad,
                              GameListModel *games, QObject *parent)
     : QObject(parent), m_base(baseDir), m_core(core), m_pad(pad), m_games(games),
-      m_settings(baseDir + QStringLiteral("/arcade.ini"), QSettings::IniFormat)
+      m_settings(baseDir + QStringLiteral("/arcade.ini"), QSettings::IniFormat),
+      m_gameCfg(baseDir + QStringLiteral("/juegos.ini"), QSettings::IniFormat)
 {
     connect(m_pad, &Gamepad::menuAction, this, &AppController::menuAction);
     connect(m_pad, &Gamepad::exitGameRequested, this, &AppController::requestExit);
@@ -103,6 +104,11 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
     connect(m_core, &LibretroCore::rewindingChanged, this, &AppController::rewindingChanged);
     m_games->setHideClones(hideClones());
     connect(m_core, &LibretroCore::gameStopped, this, [this] {
+        if (m_gameScope) { // vuelve a los ajustes y controles generales
+            m_gameScope = false;
+            loadMaps();
+            emit settingsChanged();
+        }
         // Cuenta como partida si duró al menos 10 s (las pruebas de carga no cuentan)
         if (m_playClock.isValid() && m_playClock.elapsed() >= 10000)
             m_games->notePlayed(m_rom, m_playClock.elapsed() / 1000);
@@ -117,25 +123,8 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
 
     // Mapeo de botones: input/map en arcade.ini, un número de botón físico por acción
     // (input/map = jugador 1, map2..map4 los demás; input/keys1 y keys2 = teclas de J1 y J2)
-    auto readList = [this](const QString &key) {
-        QList<int> out;
-        for (const QString &v : m_settings.value(key).toString().split(u',', Qt::SkipEmptyParts)) out << v.toInt();
-        return out;
-    };
-    auto writeList = [this](const QString &key, const QList<int> &list) {
-        QStringList out;
-        for (int v : list) out << QString::number(v);
-        m_settings.setValue(key, out.join(u','));
-    };
-    auto mapKey = [](int player) { return player == 0 ? QStringLiteral("input/map") : QStringLiteral("input/map%1").arg(player + 1); };
-    for (int p = 0; p < Gamepad::MaxPlayers; ++p)
-        m_pad->setMapping(readList(mapKey(p)), p); // se ignora si no es válido
-    for (int p = 0; p < 2; ++p)
-        m_pad->setKeyMapping(readList(QStringLiteral("input/keys%1").arg(p + 1)), p);
-    connect(m_pad, &Gamepad::mappingChanged, this, [this, writeList, mapKey] {
-        for (int p = 0; p < Gamepad::MaxPlayers; ++p) writeList(mapKey(p), m_pad->mapping(p));
-        for (int p = 0; p < 2; ++p) writeList(QStringLiteral("input/keys%1").arg(p + 1), m_pad->keyMapping(p));
-    });
+    loadMaps();
+    connect(m_pad, &Gamepad::mappingChanged, this, [this] { if (!m_applyingMaps) saveMaps(); });
     connect(m_core, &LibretroCore::pausedChanged, this, [this] {
         m_pad->setPaused(m_core->isPaused());
         emit pausedChanged();
@@ -183,10 +172,91 @@ void AppController::answerExit(bool leave)
     emit confirmingExitChanged();
 }
 
-bool AppController::scanlines() const { return m_settings.value(QStringLiteral("video/scanlines"), true).toBool(); }
-void AppController::setScanlines(bool v) { m_settings.setValue(QStringLiteral("video/scanlines"), v); emit settingsChanged(); }
-bool AppController::smooth() const { return m_settings.value(QStringLiteral("video/smooth"), false).toBool(); }
-void AppController::setSmooth(bool v) { m_settings.setValue(QStringLiteral("video/smooth"), v); emit settingsChanged(); }
+// ---- Ajustes por juego -------------------------------------------------------------------------
+// Con m_gameScope los ajustes de imagen y los controles se leen y escriben en el grupo del juego
+// dentro de juegos.ini ("mame/40love" se guarda como "mame|40love"); sin él, en arcade.ini.
+QString AppController::gameKey(const QString &key) const
+{
+    return QString(m_rom).replace(u'/', u'|') + u'/' + QString(key).replace(u'/', u'_');
+}
+
+QVariant AppController::videoValue(const QString &key, const QVariant &def) const
+{
+    if (m_gameScope) {
+        const QVariant v = m_gameCfg.value(gameKey(key));
+        if (v.isValid()) return v;
+    }
+    return m_settings.value(key, def);
+}
+
+void AppController::setVideoValue(const QString &key, const QVariant &v)
+{
+    if (m_gameScope) m_gameCfg.setValue(gameKey(key), v);
+    else             m_settings.setValue(key, v);
+    emit settingsChanged();
+}
+
+static QString mapKeyName(int player) { return player == 0 ? QStringLiteral("input/map") : QStringLiteral("input/map%1").arg(player + 1); }
+
+void AppController::loadMaps()
+{
+    auto read = [this](const QString &key) {
+        QList<int> out;
+        const QString text = videoValue(key, QString()).toString();
+        for (const QString &v : text.split(u',', Qt::SkipEmptyParts)) out << v.toInt();
+        return out;
+    };
+    m_applyingMaps = true; // que cargar no dispare un guardado
+    for (int p = 0; p < Gamepad::MaxPlayers; ++p) {
+        m_pad->resetMapping(p);
+        m_pad->setMapping(read(mapKeyName(p)), p); // se ignora si no es válido
+    }
+    for (int p = 0; p < 2; ++p) {
+        m_pad->resetDevice(Gamepad::MaxPlayers + p);
+        m_pad->setKeyMapping(read(QStringLiteral("input/keys%1").arg(p + 1)), p);
+    }
+    m_applyingMaps = false;
+}
+
+void AppController::saveMaps()
+{
+    auto write = [this](const QString &key, const QList<int> &list) {
+        QStringList out;
+        for (int v : list) out << QString::number(v);
+        if (m_gameScope) m_gameCfg.setValue(gameKey(key), out.join(u','));
+        else             m_settings.setValue(key, out.join(u','));
+    };
+    for (int p = 0; p < Gamepad::MaxPlayers; ++p) write(mapKeyName(p), m_pad->mapping(p));
+    for (int p = 0; p < 2; ++p) write(QStringLiteral("input/keys%1").arg(p + 1), m_pad->keyMapping(p));
+}
+
+void AppController::setGameConfig(bool v)
+{
+    if (!m_core->isRunning() || v == m_gameScope) return;
+    if (v) {
+        // Parte de lo que hay ahora mismo: se copia al grupo del juego y desde aquí cambia aparte
+        const int crtNow = crt(), aspectNow = aspectMode();
+        const bool scan = scanlines(), smoothNow = smooth(), bezelNow = bezel();
+        m_gameScope = true;
+        m_gameCfg.setValue(gameKey(QStringLiteral("propio")), true);
+        m_gameCfg.setValue(gameKey(QStringLiteral("video/crt")), crtNow);
+        m_gameCfg.setValue(gameKey(QStringLiteral("video/aspect")), aspectNow);
+        m_gameCfg.setValue(gameKey(QStringLiteral("video/scanlines")), scan);
+        m_gameCfg.setValue(gameKey(QStringLiteral("video/smooth")), smoothNow);
+        m_gameCfg.setValue(gameKey(QStringLiteral("video/bezel")), bezelNow);
+        saveMaps();
+    } else {
+        m_gameCfg.remove(QString(m_rom).replace(u'/', u'|'));
+        m_gameScope = false;
+        loadMaps();
+    }
+    emit settingsChanged();
+}
+
+bool AppController::scanlines() const { return videoValue(QStringLiteral("video/scanlines"), true).toBool(); }
+void AppController::setScanlines(bool v) { setVideoValue(QStringLiteral("video/scanlines"), v); }
+bool AppController::smooth() const { return videoValue(QStringLiteral("video/smooth"), false).toBool(); }
+void AppController::setSmooth(bool v) { setVideoValue(QStringLiteral("video/smooth"), v); }
 bool AppController::fullscreen() const { return m_settings.value(QStringLiteral("video/fullscreen"), true).toBool(); }
 void AppController::setFullscreen(bool v) { m_settings.setValue(QStringLiteral("video/fullscreen"), v); emit settingsChanged(); }
 int AppController::screenIndex() const { return m_settings.value(QStringLiteral("video/screen"), 0).toInt(); }
@@ -199,12 +269,12 @@ void AppController::setVolume(int v)
     m_core->setVolume(v / 100.0);
     emit settingsChanged();
 }
-int AppController::aspectMode() const { return qBound(0, m_settings.value(QStringLiteral("video/aspect"), 0).toInt(), 2); }
-void AppController::setAspectMode(int v) { m_settings.setValue(QStringLiteral("video/aspect"), (v % 3 + 3) % 3); emit settingsChanged(); }
-int AppController::crt() const { return qBound(0, m_settings.value(QStringLiteral("video/crt"), 0).toInt(), 2); }
-void AppController::setCrt(int v) { m_settings.setValue(QStringLiteral("video/crt"), (v % 3 + 3) % 3); emit settingsChanged(); }
-bool AppController::bezel() const { return m_settings.value(QStringLiteral("video/bezel"), false).toBool(); }
-void AppController::setBezel(bool v) { m_settings.setValue(QStringLiteral("video/bezel"), v); emit settingsChanged(); }
+int AppController::aspectMode() const { return qBound(0, videoValue(QStringLiteral("video/aspect"), 0).toInt(), 2); }
+void AppController::setAspectMode(int v) { setVideoValue(QStringLiteral("video/aspect"), (v % 3 + 3) % 3); }
+int AppController::crt() const { return qBound(0, videoValue(QStringLiteral("video/crt"), 0).toInt(), 2); }
+void AppController::setCrt(int v) { setVideoValue(QStringLiteral("video/crt"), (v % 3 + 3) % 3); }
+bool AppController::bezel() const { return videoValue(QStringLiteral("video/bezel"), false).toBool(); }
+void AppController::setBezel(bool v) { setVideoValue(QStringLiteral("video/bezel"), v); }
 bool AppController::autoResume() const { return m_settings.value(QStringLiteral("game/autoResume"), false).toBool(); }
 void AppController::setAutoResume(bool v) { m_settings.setValue(QStringLiteral("game/autoResume"), v); emit settingsChanged(); }
 bool AppController::attract() const { return m_settings.value(QStringLiteral("ui/attract"), false).toBool(); }
@@ -222,6 +292,12 @@ bool AppController::menuSounds() const { return !m_quiet && m_settings.value(QSt
 void AppController::setMenuSounds(bool v) { m_settings.setValue(QStringLiteral("audio/menuSounds"), v); emit settingsChanged(); }
 bool AppController::menuMusic() const { return !m_quiet && m_settings.value(QStringLiteral("audio/menuMusic"), true).toBool(); }
 void AppController::setMenuMusic(bool v) { m_settings.setValue(QStringLiteral("audio/menuMusic"), v); emit settingsChanged(); }
+int AppController::diskCount() const { return m_core->diskCount(); }
+void AppController::nextDisk()
+{
+    emit toast(m_core->nextDisk() ? QStringLiteral("DISCO %1 DE %2").arg(m_core->diskIndex() + 1).arg(m_core->diskCount())
+                                  : QStringLiteral("No se pudo cambiar de disco"));
+}
 bool AppController::hideBroken() const { return m_settings.value(QStringLiteral("ui/hideBroken"), false).toBool(); }
 void AppController::setHideBroken(bool v)
 {
@@ -242,6 +318,13 @@ void AppController::setFastForward(bool v)
     if (!m_core->isRunning() || v == m_core->fastForward()) return;
     m_core->setFastForward(v);
     emit fastForwardChanged();
+}
+QString AppController::lastSystem() const { return m_settings.value(QStringLiteral("ui/lastSystem")).toString(); }
+void AppController::setLastSystem(const QString &v)
+{
+    if (v == lastSystem()) return;
+    m_settings.setValue(QStringLiteral("ui/lastSystem"), v);
+    emit settingsChanged();
 }
 int AppController::lastIndex() const { return m_settings.value(QStringLiteral("ui/lastIndex"), 0).toInt(); }
 void AppController::setLastIndex(int v)
@@ -332,6 +415,11 @@ void AppController::launch(int row)
     }
     m_games->setStatus(m_rom, 1);
     m_pad->setMode(Gamepad::GameMode);
+
+    // ¿Este juego tiene ajustes propios? Entonces rigen su imagen y sus controles
+    m_gameScope = m_gameCfg.value(gameKey(QStringLiteral("propio")), false).toBool();
+    if (m_gameScope) loadMaps();
+    emit settingsChanged();
 
     // Marco: media/bezels/<rom>.png; si no hay, default-vertical.png (juegos verticales) o default.png.
     // Sin ninguna imagen la interfaz dibuja un marco sencillo con los colores del tema.

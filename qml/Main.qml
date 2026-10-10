@@ -33,6 +33,27 @@ Window {
     property bool optionsOpen: false
     property bool searchOpen: false
     property bool remapOpen: false
+    // Pantalla de inicio: se elige el sistema (o todos / favoritos / recientes) y luego se entra a su lista
+    property bool homeOpen: true
+    property var cards: []
+    function refreshCards() { cards = Games.systemCards() }
+    function goHome() {
+        refreshCards()
+        var i = 0
+        for (var k = 0; k < cards.length; ++k) if (cards[k].id === Games.system) i = k
+        home.index = i
+        searchOpen = false
+        homeOpen = true
+    }
+    function enterSystem(id) {
+        var src = Games.sourceRow(current)
+        Games.search = ""
+        Games.system = id
+        App.lastSystem = id
+        homeOpen = false
+        var row = Games.rowOfSource(src >= 0 ? src : App.lastIndex)
+        select(row >= 0 ? row : 0)
+    }
     property string errorText: ""
     readonly property var aspectNames: ["ORIGINAL", "PÍXELES EXACTOS", "ESTIRADA"]
     readonly property var crtNames: ["NO", "PLANO", "CURVO"]
@@ -42,7 +63,7 @@ Window {
     // máquina de salón. Cualquier botón, tecla o movimiento del mouse lo detiene.
     property bool attractOn: false
     readonly property bool menuIdle: !App.gameRunning && !optionsOpen && !searchOpen && !remapOpen
-                                     && errorText === "" && Games.count > 1
+                                     && errorText === "" && (homeOpen || Games.count > 1)
     Timer {
         id: idleTimer
         interval: App.attractSeconds * 1000
@@ -52,7 +73,10 @@ Window {
     Timer {
         interval: 7000; repeat: true; triggeredOnStart: true
         running: win.attractOn && win.menuIdle
-        onTriggered: win.select(Math.floor(Math.random() * Games.count))
+        onTriggered: {
+            if (win.homeOpen) home.index = Math.floor(Math.random() * win.cards.length)
+            else win.select(Math.floor(Math.random() * Games.count))
+        }
     }
     onMenuIdleChanged: if (!menuIdle) attractOn = false
     // Devuelve true si la entrada solo sirvió para despertar el menú
@@ -66,7 +90,12 @@ Window {
     // ---------------- Entrada unificada (teclado + mandos) ----------------
     function act(a) {
         if (App.confirmingExit) { sfx(a); exitDlg.handle(a); return }
-        if (App.paused) { sfx(a); pauseMenu.handle(a); return }
+        if (App.paused) {
+            if (Pad.capturing) return
+            sfx(a)
+            if (remapOpen) remap.handle(a); else pauseMenu.handle(a) // los controles también se abren desde la pausa
+            return
+        }
         if (App.gameRunning) return
         if (wake()) return
         if (!Pad.capturing) sfx(a)
@@ -75,6 +104,8 @@ Window {
         if (searchOpen) { search.handle(a); return }
         if (remapOpen) { remap.handle(a); return }
         if (optionsOpen) { options.handle(a); return }
+        if (a === "options") { optionsOpen = true; return }
+        if (homeOpen) { home.handle(a); return }
         switch (a) {
         case "up":       move(-1); break
         case "down":     move(1); break
@@ -83,7 +114,7 @@ Window {
         case "pageUp":   select(Games.jumpLetter(current, -1)); break
         case "pageDown": select(Games.jumpLetter(current, 1)); break
         case "accept":   if (Games.count > 0) { clickSfx(); App.launch(current) } break
-        case "back":     optionsOpen = true; break
+        case "back":     goHome(); break // las opciones se abren desde la pantalla de sistemas (o con F1)
         case "search":     search.index = 0; searchOpen = true; break
         case "systemPrev": changeSystem(-1); break
         case "systemNext": changeSystem(1); break
@@ -149,6 +180,7 @@ Window {
     Connections {
         target: Games
         function onFilterChanged() { win.listRev++ }
+        function onSystemsChanged() { win.refreshCards() }
         function onDataChanged() { win.listRev++ } // favorito / veces jugado del juego seleccionado
     }
     Connections {
@@ -156,7 +188,9 @@ Window {
         function onMenuAction(a) { win.act(a) }
         function onError(t) { win.errorText = t }
         function onToast(t) { toast.show(t) }
+        function onPausedChanged() { if (!App.paused) win.remapOpen = false }
         function onGameRunningChanged() {
+            win.remapOpen = false
             if (App.gameRunning) emu.forceActiveFocus()
             else { menuRoot.forceActiveFocus(); preview.restart() }
         }
@@ -191,6 +225,11 @@ Window {
             map[Qt.Key_Return] = "accept"; map[Qt.Key_Enter] = "accept"
             map[Qt.Key_Escape] = "back"; map[Qt.Key_Backspace] = "back"
             if (win.wake()) { e.accepted = true; return }
+            if (e.key === Qt.Key_F1 && !Pad.capturing && !win.searchOpen) { win.act("options"); e.accepted = true; return }
+            // Escribir en la pantalla de sistemas busca entre todos los juegos
+            if (win.homeOpen && win.errorText === "" && !win.optionsOpen && !win.remapOpen && !Pad.capturing
+                    && e.text.length === 1 && /[0-9a-zA-Z]/.test(e.text))
+                win.enterSystem("")
             // Las letras y números no son atajos: en el menú escriben directo en la barra de búsqueda
             if (e.key === Qt.Key_F11) { App.fullscreen = !App.fullscreen; e.accepted = true; return }
             if ((e.key === Qt.Key_F2 || e.key === Qt.Key_Insert) && !Pad.capturing) { win.act("favorite"); e.accepted = true; return }
@@ -270,7 +309,8 @@ Window {
             }
             Text {
                 anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 28 * u }
-                text: Games.count + (Games.count < Games.total ? " DE " + Games.total : "") + " JUEGOS"
+                text: win.homeOpen ? Games.total + " JUEGOS"
+                                   : Games.count + (Games.count < Games.total ? " DE " + Games.total : "") + " JUEGOS"
                 font.family: arcadeFont; font.pixelSize: 24 * u; font.bold: true
                 color: win.cAccent; style: Text.Outline; styleColor: "#600010"
             }
@@ -284,12 +324,24 @@ Window {
                     Text {
                         id: sysText
                         anchors.centerIn: parent
-                        text: "◄ " + (Games.system !== "" ? Games.system : "TODOS LOS SISTEMAS") + " ►"
+                        text: win.homeOpen ? "ELIGE UN SISTEMA" : "◄ " + (Games.system !== "" ? Games.system : "TODOS LOS JUEGOS") + " ►"
                         font.family: arcadeFont; font.pixelSize: 18 * u; font.bold: true
                         color: Games.system !== "" ? win.cAccent : "white"
                     }
                     // Clic en la mitad izquierda = sistema anterior, derecha = siguiente
                     MouseArea { anchors.fill: parent; onClicked: (m) => win.act(m.x < width / 2 ? "systemPrev" : "systemNext") }
+                }
+                Rectangle { // volver a la pantalla de sistemas con el mouse
+                    visible: !win.homeOpen
+                    width: homeText.width + 24 * u; height: 36 * u; radius: 18 * u
+                    color: "#60000000"; border.color: "#80ffffff"; border.width: 2 * u
+                    Text {
+                        id: homeText
+                        anchors.centerIn: parent
+                        text: "SISTEMAS"; color: "white"
+                        font.family: arcadeFont; font.pixelSize: 15 * u; font.bold: true
+                    }
+                    MouseArea { anchors.fill: parent; onClicked: win.goHome() }
                 }
             }
         }
@@ -299,6 +351,7 @@ Window {
             id: listPanel
             anchors { top: header.bottom; left: parent.left; bottom: footer.top; margins: 20 * u }
             width: parent.width * 0.42
+            visible: !win.homeOpen
             color: win.cPanel; border.color: win.cBorder; border.width: 2 * u; radius: 6 * u
 
             // Barra de búsqueda siempre visible: se escribe directo con el teclado,
@@ -485,6 +538,7 @@ Window {
                       : Games.search !== "" ? "SIN RESULTADOS\n\nPrueba con otra palabra\no cambia de sistema"
                       : Games.system.indexOf("FAVORITOS") >= 0 ? "AÚN NO TIENES FAVORITOS\n\nElige un juego y pulsa Ⓨ/△ o F2\npara añadirlo aquí"
                       : Games.system === "RECIENTES" ? "AÚN NO HAS JUGADO NADA\n\nAquí aparecerán los últimos\njuegos que abras"
+                      : home.folderOf(Games.system) !== "" ? "ESTE SISTEMA AÚN NO TIENE JUEGOS\n\nCopia los juegos en:\n" + App.baseDir + "/roms/" + home.folderOf(Games.system)
                       : "SIN RESULTADOS\n\nPrueba con otra palabra\no cambia de sistema"
                 font.family: arcadeFont; font.pixelSize: 18 * u; color: win.cDim; wrapMode: Text.WrapAnywhere
                 width: parent.width - 40 * u
@@ -494,6 +548,7 @@ Window {
         // ---------------- Preview ----------------
         Item {
             id: previewArea
+            visible: !win.homeOpen
             anchors { top: header.bottom; left: listPanel.right; right: parent.right; bottom: footer.top; margins: 20 * u }
 
             Rectangle {
@@ -614,6 +669,145 @@ Window {
             }
         }
 
+        // ---------------- Pantalla de sistemas (inicio) ----------------
+        // Una tarjeta por lista: todos, favoritos, recientes y cada sistema, tenga juegos o no.
+        // La imagen de la tarjeta sale de media/sistemas/<nombre>.png si existe; si no, un mosaico
+        // con capturas de sus juegos.
+        Item {
+            id: home
+            anchors { top: header.bottom; left: parent.left; right: parent.right; bottom: footer.top }
+            visible: win.homeOpen
+            property int index: 0
+            readonly property var card: win.cards.length > 0 ? win.cards[Math.min(index, win.cards.length - 1)] : null
+            function folderOf(system) {
+                for (var k = 0; k < win.cards.length; ++k) if (win.cards[k].id === system) return win.cards[k].folder
+                return ""
+            }
+            function handle(a) {
+                var n = win.cards.length
+                if (n === 0) return
+                if (a === "left" || a === "systemPrev") index = (index + n - 1) % n
+                else if (a === "right" || a === "systemNext") index = (index + 1) % n
+                else if (a === "pageUp") index = Math.max(0, index - 5)
+                else if (a === "pageDown") index = Math.min(n - 1, index + 5)
+                else if (a === "accept") win.enterSystem(card.id)
+                else if (a === "back") win.optionsOpen = true
+                else if (a === "search") { win.enterSystem(""); search.index = 0; win.searchOpen = true }
+            }
+
+            Rectangle { anchors.fill: parent; color: "#b4000008" } // oscurece el fondo del tema para que se lea
+            // Fondo: una captura del sistema elegido, grande y oscurecida
+            Image {
+                anchors.fill: parent
+                source: home.card && home.card.images.length > 0 ? home.card.images[0] : ""
+                fillMode: Image.PreserveAspectCrop; smooth: true; asynchronous: true
+                opacity: 0.22
+            }
+
+            ListView {
+                id: cardRow
+                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; verticalCenterOffset: -50 * u }
+                height: 360 * u
+                orientation: ListView.Horizontal
+                model: win.cards.length
+                currentIndex: home.index
+                interactive: false
+                spacing: 26 * u
+                highlightMoveDuration: 180
+                preferredHighlightBegin: width / 2 - 140 * u
+                preferredHighlightEnd: width / 2 + 140 * u
+                highlightRangeMode: ListView.StrictlyEnforceRange
+                delegate: Item {
+                    readonly property var c: win.cards[index]
+                    readonly property bool sel: index === home.index
+                    width: 280 * u; height: cardRow.height
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 280 * u; height: 320 * u; radius: 10 * u
+                        scale: sel ? 1.1 : 0.9
+                        opacity: sel ? 1 : (c && c.count > 0 ? 0.75 : 0.45)
+                        Behavior on scale { NumberAnimation { duration: 140 } }
+                        color: win.cPanel
+                        border.color: sel ? win.cAccent : win.cBorder; border.width: (sel ? 4 : 2) * u
+                        // Imagen de la tarjeta
+                        Rectangle {
+                            id: art
+                            anchors { top: parent.top; left: parent.left; right: parent.right; margins: 10 * u }
+                            height: 200 * u; color: "black"; clip: true; radius: 4 * u
+                            Image {
+                                anchors.fill: parent
+                                visible: c && c.logo !== ""
+                                source: c ? c.logo : ""
+                                fillMode: Image.PreserveAspectFit; smooth: true; asynchronous: true
+                            }
+                            Grid { // mosaico 2x2 con capturas de sus juegos
+                                anchors.fill: parent
+                                visible: c && c.logo === "" && c.images.length > 0
+                                columns: c && c.images.length > 1 ? 2 : 1
+                                Repeater {
+                                    model: c && c.logo === "" ? c.images.length : 0
+                                    Image {
+                                        width: art.width / (c.images.length > 1 ? 2 : 1)
+                                        height: art.height / (c.images.length > 2 ? 2 : 1)
+                                        source: c.images[index]
+                                        fillMode: Image.PreserveAspectCrop; smooth: false; asynchronous: true
+                                        sourceSize.width: 320
+                                    }
+                                }
+                            }
+                            Text { // sin imagen ni juegos: iniciales grandes
+                                anchors.centerIn: parent
+                                visible: c && c.logo === "" && c.images.length === 0
+                                text: c ? c.name.split(/[ \/]+/).map(function (w) { return w.charAt(0) }).join("").substring(0, 3) : ""
+                                color: win.cDim; font.family: arcadeFont; font.pixelSize: 80 * u; font.bold: true
+                            }
+                        }
+                        Text {
+                            anchors { top: art.bottom; topMargin: 10 * u; left: parent.left; right: parent.right; margins: 8 * u }
+                            horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
+                            text: c ? c.name : ""
+                            color: sel ? win.cAccent : win.cText
+                            font.family: arcadeFont; font.pixelSize: 22 * u; font.bold: true
+                        }
+                        Text {
+                            anchors { bottom: parent.bottom; bottomMargin: 12 * u; horizontalCenter: parent.horizontalCenter }
+                            text: !c ? "" : c.count > 0 ? c.count + (c.count === 1 ? " JUEGO" : " JUEGOS") : "SIN JUEGOS AÚN"
+                            color: c && c.count > 0 ? win.cAccent2 : win.cDim
+                            font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: { if (sel) win.enterSystem(c.id); else home.index = index }
+                            onDoubleClicked: { home.index = index; win.enterSystem(c.id) }
+                            onWheel: (w) => home.handle(w.angleDelta.y > 0 ? "left" : "right")
+                        }
+                    }
+                }
+            }
+            Column {
+                anchors { top: cardRow.bottom; topMargin: 8 * u; horizontalCenter: parent.horizontalCenter }
+                spacing: 6 * u
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: home.card ? home.card.name : ""
+                    color: "white"; style: Text.Outline; styleColor: "black"
+                    font.family: arcadeFont; font.pixelSize: 40 * u; font.bold: true
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: !home.card ? "" : home.card.count > 0 ? "Ⓐ / ENTER PARA ENTRAR"
+                          : home.card.folder !== "" ? "COPIA SUS JUEGOS EN  roms\\" + home.card.folder
+                          : home.card.id.indexOf("FAVORITOS") >= 0 ? "MARCA JUEGOS CON Ⓨ/△ O F2 PARA VERLOS AQUÍ" : "AQUÍ SALDRÁN LOS ÚLTIMOS JUEGOS QUE ABRAS"
+                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 18 * u
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: (home.index + 1) + " / " + win.cards.length
+                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 14 * u
+                }
+            }
+        }
+
         // ---------------- Pie con controles ----------------
         Rectangle {
             id: footer
@@ -626,10 +820,13 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter; x: 24 * u
                 spacing: 20 * u
                 Repeater {
-                    model: [ { t: "▲▼ ELEGIR", a: "" }, { t: "◄► SALTAR 10", a: "" }, { t: "LB/RB LETRA", a: "" },
-                             { t: "Ⓐ/✕ JUGAR", a: "accept" }, { t: "Ⓑ/○ OPCIONES", a: "back" },
-                             { t: "Ⓧ/□ BUSCAR", a: "search" }, { t: "Ⓨ/△ FAVORITO", a: "favorite" },
-                             { t: "LT/RT LISTA", a: "systemNext" } ]
+                    model: win.homeOpen
+                           ? [ { t: "◄► ELEGIR SISTEMA", a: "" }, { t: "Ⓐ/✕ ENTRAR", a: "accept" },
+                               { t: "Ⓧ/□ BUSCAR EN TODOS", a: "search" }, { t: "Ⓑ/○ OPCIONES", a: "back" } ]
+                           : [ { t: "▲▼ ELEGIR", a: "" }, { t: "◄► SALTAR 10", a: "" }, { t: "LB/RB LETRA", a: "" },
+                               { t: "Ⓐ/✕ JUGAR", a: "accept" }, { t: "Ⓑ/○ SISTEMAS", a: "back" },
+                               { t: "Ⓧ/□ BUSCAR", a: "search" }, { t: "Ⓨ/△ FAVORITO", a: "favorite" },
+                               { t: "LT/RT LISTA", a: "systemNext" }, { t: "F1 OPCIONES", a: "options" } ]
                     Text {
                         text: modelData.t
                         font.family: arcadeFont; font.pixelSize: 15 * u; color: win.cText
@@ -833,25 +1030,39 @@ Window {
             color: "#b0000000"
             property int index: 0
             property string panel: "" // "" = menú, "save" / "load" = ranuras, "core" = opciones del emulador
-            onVisibleChanged: if (visible) { index = 0; panel = "" }
-            readonly property var items: [
+            property bool settings: false // false = menú principal de pausa, true = AJUSTES
+            onVisibleChanged: if (visible) { index = 0; panel = ""; settings = false }
+            function open(s) { settings = s; index = 0 }
+            readonly property var mainItems: [
                 { label: "CONTINUAR", act: function () { App.togglePause() } },
                 { label: "GUARDAR PARTIDA", act: function () { slots.index = 0; pauseMenu.panel = "save" } },
                 { label: "CARGAR PARTIDA", act: function () { slots.index = 0; pauseMenu.panel = "load" } },
-                { label: "◄ VOLUMEN: " + App.volume + " % ►", act: function () { App.volume = App.volume >= 100 ? 0 : App.volume + 10 },
-                  side: function (d) { App.volume = App.volume + d * 10 } },
-                { label: "◄ IMAGEN: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 },
+                { label: "TRUCOS", act: function () { coreOpts.index = 0; pauseMenu.panel = "cheats" } },
+                { label: "AJUSTES  ►", act: function () { pauseMenu.open(true) } },
+                { label: "CAPTURAR PANTALLA", act: function () { App.takeScreenshot() } },
+                { label: "REINICIAR JUEGO", act: function () { App.resetGame(); App.togglePause() } },
+                { label: "SALIR DEL JUEGO", act: function () { App.stopGame() } }
+            ].concat(App.diskCount > 1 ? [{ label: "CAMBIAR DE DISCO (" + App.diskCount + ")", act: function () { App.nextDisk() } }] : [])
+            // Con "SOLO PARA ESTE JUEGO" en SÍ, imagen y controles se guardan aparte para este juego
+            readonly property var settingsItems: [
+                { label: "SOLO PARA ESTE JUEGO: " + (App.gameConfig ? "SÍ" : "NO"), act: function () {
+                      App.gameConfig = !App.gameConfig
+                      toast.show(App.gameConfig ? "IMAGEN Y CONTROLES SE GUARDAN SOLO PARA ESTE JUEGO"
+                                                : "ESTE JUEGO VUELVE A USAR LOS AJUSTES GENERALES") } },
+                { label: "◄ TAMAÑO: " + win.aspectNames[App.aspectMode] + " ►", act: function () { App.aspectMode = App.aspectMode + 1 },
                   side: function (d) { App.aspectMode = App.aspectMode + d } },
                 { label: "◄ EFECTO CRT: " + win.crtNames[App.crt] + " ►", act: function () { App.crt = App.crt + 1 },
                   side: function (d) { App.crt = App.crt + d } },
+                { label: "SCANLINES SIMPLES: " + (App.scanlines ? "SÍ" : "NO"), act: function () { App.scanlines = !App.scanlines } },
                 { label: "MARCO: " + (App.bezel ? "SÍ" : "NO"), act: function () { App.bezel = !App.bezel } },
+                { label: "CONTROLES", act: function () { remap.index = 0; remap.dev = 0; win.remapOpen = true } },
+                { label: "◄ VOLUMEN: " + App.volume + " % ►", act: function () { App.volume = App.volume >= 100 ? 0 : App.volume + 10 },
+                  side: function (d) { App.volume = App.volume + d * 10 } },
                 { label: "AVANCE RÁPIDO: " + (App.fastForward ? "SÍ" : "NO"), act: function () { App.fastForward = !App.fastForward } },
-                { label: "CAPTURAR PANTALLA", act: function () { App.takeScreenshot() } },
-                { label: "TRUCOS", act: function () { coreOpts.index = 0; pauseMenu.panel = "cheats" } },
                 { label: "OPCIONES DEL EMULADOR", act: function () { coreOpts.index = 0; pauseMenu.panel = "core" } },
-                { label: "REINICIAR JUEGO", act: function () { App.resetGame(); App.togglePause() } },
-                { label: "SALIR DEL JUEGO", act: function () { App.stopGame() } }
+                { label: "VOLVER", act: function () { pauseMenu.open(false) } }
             ]
+            readonly property var items: settings ? settingsItems : mainItems
             function handle(a) {
                 if (a === "pause") { App.togglePause(); return }
                 if (panel === "core" || panel === "cheats") { coreOpts.handle(a); return }
@@ -860,7 +1071,7 @@ Window {
                 else if (a === "down") index = (index + 1) % items.length
                 else if (a === "accept") items[index].act()
                 else if ((a === "left" || a === "right") && items[index].side) items[index].side(a === "left" ? -1 : 1)
-                else if (a === "back") App.togglePause()
+                else if (a === "back") { if (settings) open(false); else App.togglePause() }
             }
             MouseArea { anchors.fill: parent; onWheel: {} }
             Column {
@@ -869,7 +1080,7 @@ Window {
                 spacing: 7 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "PAUSA"
+                    text: pauseMenu.settings ? "AJUSTES" : "PAUSA"
                     font.family: arcadeFont; font.pixelSize: 56 * u; font.bold: true
                     color: win.cAccent; style: Text.Outline; styleColor: "#600010"
                     SequentialAnimation on opacity {
@@ -889,7 +1100,7 @@ Window {
                     Rectangle {
                         readonly property bool sel: index === pauseMenu.index
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: 460 * u; height: 34 * u; radius: 4 * u
+                        width: 460 * u; height: 40 * u; radius: 4 * u
                         color: sel ? win.cAccent : "#40000000"
                         border.color: sel ? "white" : "transparent"; border.width: 2 * u
                         Text {
@@ -1190,7 +1401,8 @@ Window {
         id: remap
         anchors.fill: parent
         color: "#c0000000"
-        visible: win.remapOpen && !App.gameRunning
+        visible: win.remapOpen && (!App.gameRunning || App.paused)
+        z: 20
         property int index: 0
         property int dev: 0 // 0..3 = mando de cada jugador, 4 y 5 = teclado de J1 y J2
         readonly property bool keyboard: dev >= 4
@@ -1228,8 +1440,8 @@ Window {
                 spacing: 2 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "CONTROLES"; color: win.cAccent2
-                    font.family: arcadeFont; font.pixelSize: 28 * u; font.bold: true
+                    text: App.gameConfig ? "CONTROLES · SOLO " + App.currentTitle.substring(0, 22).toUpperCase() : "CONTROLES"; color: win.cAccent2
+                    font.family: arcadeFont; font.pixelSize: (App.gameConfig ? 20 : 28) * u; font.bold: true
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -1325,5 +1537,11 @@ Window {
         Timer { id: toastTimer; interval: 1800; onTriggered: toast.opacity = 0 }
     }
 
-    Component.onCompleted: { select(current); preview.restart() }
+    Component.onCompleted: {
+        // Arranca en la pantalla de sistemas, parada sobre la última lista que se abrió
+        Games.system = App.lastSystem
+        current = Math.max(0, Games.rowOfSource(App.lastIndex))
+        select(current); preview.restart()
+        goHome()
+    }
 }

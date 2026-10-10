@@ -73,6 +73,9 @@ public:
     // Llamado por el núcleo en cada cuadro
     void poll();
     bool retroButton(int port, unsigned retroId) const;
+    // Sticks como analógicos (-32768..32767): stick 0 = izquierdo, 1 = derecho; eje 0 = X, 1 = Y.
+    // El izquierdo sigue contando además como cruceta para los juegos que no usan analógico.
+    qint16 analog(int port, unsigned stick, unsigned axis) const;
     // Botones de "mantener pulsado" (mando, o tecla Retroceso para rebobinar)
     // Vibración que pide el núcleo: motor fuerte o débil del mando de ese jugador (0 = parar)
     void setRumble(int port, bool strongMotor, quint16 strength);
@@ -113,6 +116,7 @@ private:
         bool pause = false;         // clic del stick derecho
         bool rewind = false, fast = false;
         quint16 rumbleStrong = 0, rumbleWeak = 0;
+        std::array<qint16, 4> axes{}; // lx, ly, rx, ry
     };
     std::array<Pad, MaxPlayers> m_pads{};
     std::array<uint16_t, 2> m_keyboard{}; // bitmask del teclado: jugador 1 y jugador 2

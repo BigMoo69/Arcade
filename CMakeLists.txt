@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Quick Multimedia ShaderTools)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Quick Multimedia ShaderTools OpenGL)
 find_package(SDL2 REQUIRED)
 
 qt_add_executable(Arcade WIN32
@@ -43,7 +43,12 @@ else()
     target_link_libraries(Arcade PRIVATE ${SDL2_LIBRARIES})
 endif()
 
-target_link_libraries(Arcade PRIVATE Qt6::Quick Qt6::Multimedia)
+target_link_libraries(Arcade PRIVATE Qt6::Quick Qt6::Multimedia Qt6::OpenGL)
+
+# Núcleo libretro de prueba que dibuja con OpenGL (no se compila por defecto):
+#   cmake --build build --config Release --target testgl_libretro
+add_library(testgl_libretro MODULE EXCLUDE_FROM_ALL tests/testgl_core.cpp)
+set_target_properties(testgl_libretro PROPERTIES PREFIX "" AUTOMOC OFF)
 
 if(WIN32)
     target_link_libraries(Arcade PRIVATE winmm)

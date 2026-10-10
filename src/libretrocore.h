@@ -18,6 +18,9 @@
 #include "libretro/libretro.h"
 
 class QAudioSink;
+class QOpenGLContext;
+class QOffscreenSurface;
+class QOpenGLFramebufferObject;
 class QIODevice;
 class Gamepad;
 
@@ -49,6 +52,11 @@ public:
     // Rebobinar: guarda un estado cada pocos cuadros y, mientras el mando o el teclado mantengan
     // el botón de rebobinar, los va cargando hacia atrás. Gasta memoria: por eso se puede apagar.
     void setRewindEnabled(bool on);
+
+    // Juegos de varios discos (PlayStation): cuántos hay y pasar al siguiente
+    int diskCount() const;
+    int diskIndex() const;
+    bool nextDisk();
     bool rewinding() const { return m_rewinding; }
 
     // Cuadro actual ya girado y con la proporción de pantalla correcta (capturas y miniaturas)
@@ -96,6 +104,22 @@ private:
     static int16_t cbInputState(unsigned port, unsigned device, unsigned index, unsigned id);
     static void    cbLog(enum retro_log_level level, const char *fmt, ...);
     static bool    cbRumble(unsigned port, enum retro_rumble_effect effect, uint16_t strength);
+    static uintptr_t cbGetFramebuffer();
+    static retro_proc_address_t cbGetProcAddress(const char *sym);
+
+    // Núcleos que dibujan con OpenGL (Dreamcast/Naomi, N64…): se les da un contexto propio fuera de
+    // pantalla y un framebuffer; cada cuadro se lee de vuelta a m_frame, así el resto del programa
+    // (escalado, efecto CRT, capturas, miniaturas) funciona igual que con los núcleos por software.
+    bool createGl();
+    void destroyGl();
+    bool ensureFbo(int w, int h);
+    void glCurrent();
+    void readHwFrame(unsigned w, unsigned h);
+    retro_hw_render_callback m_hw{};
+    bool m_hwActive = false;
+    QOpenGLContext *m_gl = nullptr;
+    QOffscreenSurface *m_glSurface = nullptr;
+    QOpenGLFramebufferObject *m_fbo = nullptr;
 
     bool environment(unsigned cmd, void *data);
     void tick();
@@ -160,6 +184,7 @@ private:
     bool m_varsDirty = false;
     bool m_varsUpdated = false; // hay un cambio que el núcleo aún no ha leído
     bool m_fast = false;
+    retro_disk_control_callback m_disk{}; // lo entrega el núcleo si maneja discos
     bool m_mute = false;            // avance rápido o rebobinado: sin sonido
     bool m_rewindOn = false, m_rewinding = false;
     std::deque<QByteArray> m_rewind; // estados guardados, el más reciente al final

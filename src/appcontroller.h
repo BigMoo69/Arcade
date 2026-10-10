@@ -20,6 +20,7 @@ class AppController : public QObject
     Q_PROPERTY(bool smooth READ smooth WRITE setSmooth NOTIFY settingsChanged)
     Q_PROPERTY(bool fullscreen READ fullscreen WRITE setFullscreen NOTIFY settingsChanged)
     Q_PROPERTY(int lastIndex READ lastIndex WRITE setLastIndex NOTIFY settingsChanged)
+    Q_PROPERTY(QString lastSystem READ lastSystem WRITE setLastSystem NOTIFY settingsChanged) // última lista abierta
     Q_PROPERTY(int volume READ volume WRITE setVolume NOTIFY settingsChanged)         // 0..100
     Q_PROPERTY(int aspectMode READ aspectMode WRITE setAspectMode NOTIFY settingsChanged) // ver EmulatorView
     Q_PROPERTY(int crt READ crt WRITE setCrt NOTIFY settingsChanged)       // 0 no, 1 plano, 2 curvo
@@ -36,6 +37,10 @@ class AppController : public QObject
     Q_PROPERTY(bool menuSounds READ menuSounds WRITE setMenuSounds NOTIFY settingsChanged)
     Q_PROPERTY(bool menuMusic READ menuMusic WRITE setMenuMusic NOTIFY settingsChanged)
     Q_PROPERTY(QString musicUrl READ musicUrl CONSTANT) // "" si no hay archivo de música
+    // Ajustes propios del juego en curso (imagen y controles): si está activo, lo que se cambie
+    // durante la partida se guarda solo para ese juego en juegos.ini; si no, vale para todos.
+    Q_PROPERTY(bool gameConfig READ gameConfig WRITE setGameConfig NOTIFY settingsChanged)
+    Q_PROPERTY(int diskCount READ diskCount NOTIFY gameRunningChanged) // discos del juego en curso
     Q_PROPERTY(bool hideBroken READ hideBroken WRITE setHideBroken NOTIFY settingsChanged)
     Q_PROPERTY(bool hideClones READ hideClones WRITE setHideClones NOTIFY settingsChanged)
     Q_PROPERTY(bool fastForward READ fastForward WRITE setFastForward NOTIFY fastForwardChanged)
@@ -59,6 +64,7 @@ public:
     bool fullscreen() const; void setFullscreen(bool v);
     int screenIndex() const; // video/screen en arcade.ini: 0 = monitor principal, 1, 2… = los demás
     int lastIndex() const;   void setLastIndex(int v);
+    QString lastSystem() const; void setLastSystem(const QString &v);
     int volume() const;      void setVolume(int v);
     int aspectMode() const;  void setAspectMode(int v);
     int crt() const;         void setCrt(int v);
@@ -73,6 +79,10 @@ public:
     bool menuMusic() const;  void setMenuMusic(bool v);
     QString musicUrl() const;
     Q_INVOKABLE QString soundUrl(const QString &name) const;
+    bool gameConfig() const { return m_gameScope; }
+    void setGameConfig(bool v);
+    int diskCount() const;
+    Q_INVOKABLE void nextDisk();
     bool hideBroken() const; void setHideBroken(bool v);
     bool hideClones() const; void setHideClones(bool v);
     bool fastForward() const; void setFastForward(bool v);
@@ -123,6 +133,14 @@ private:
     Gamepad *m_pad;
     GameListModel *m_games;
     QSettings m_settings;
+    QSettings m_gameCfg;       // juegos.ini: un grupo por juego con sus ajustes propios
+    bool m_gameScope = false;  // el juego en curso usa su grupo de juegos.ini
+    bool m_applyingMaps = false;
+    QVariant videoValue(const QString &key, const QVariant &def) const;
+    void setVideoValue(const QString &key, const QVariant &v);
+    QString gameKey(const QString &key) const;
+    void loadMaps();
+    void saveMaps();
     bool m_confirmExit = false;
     bool m_pausedBeforeConfirm = false;
     QString m_title, m_rom, m_coreIni, m_bezelImage;

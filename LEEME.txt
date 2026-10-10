@@ -48,10 +48,17 @@ CONTROLES EN EL JUEGO
   En OPCIONES > CONFIGURAR CONTROLES puedes cambiar los botones del mando y asignar
   TURBO (disparo automático al mantener) y MACROS (A+B, C+D, A+B+C con un solo botón).
 
+OTROS SISTEMAS
+  Los .zip sueltos en roms\ son arcade. Los demás sistemas van en su carpeta dentro de roms\:
+  nes, snes, megadrive, mastersystem, gb, gba, pcengine, psx, mame, dreamcast, naomi y n64.
+  Se definen en cores\sistemas.ini. Algunos necesitan BIOS en la carpeta system  (PlayStation; Dreamcast y Naomi en system\dc\; PC Engine CD: syscard3.pce).
+
 PREVIEWS (opcional)
   media\videos\<rom>.mp4     video que se reproduce al elegir el juego
   media\snaps\<rom>.png      captura (si no hay video)
   media\marquees\<rom>.png   logo del juego bajo la preview
+  media\sistemas\<sistema>.png  imagen de la tarjeta de ese sistema en la pantalla de inicio (nombre en
+                             minúsculas y sin espacios: neogeo.png, cps1.png, mame.png, nintendo64.png)
   media\bezels\<rom>.png     marco alrededor del juego (PNG del tamaño de la pantalla con el hueco
                              transparente); default.png y default-vertical.png sirven para todos
   Ej.:  media\videos\kof98.mp4   media\snaps\mslug3.png

@@ -301,6 +301,15 @@ El usuario habla español; responde en español, conciso y directo.
     `roms/nds/`) definido; el núcleo (5,1 MB) carga con `--core-info` (35 núcleos); **ningún juego probado**; tampoco
     juegos de pistola de FBNeo/MAME. No hay cursor movido con el stick (melonDS trae el suyo:
     stick derecho + R2).
+  - *PSP, GameCube, Wii, PS2, 3DS y Model 3 (2026-10-09):* núcleos `ppsspp`, `dolphin`, `pcsx2` (LRPS2),
+    `azahar` y `supermodel` (80 MB) + recursos del buildbot (`assets/system/PPSSPP.zip` y `Dolphin.zip`)
+    en `dist/system/PPSSPP/` y `dist/system/dolphin-emu/` (el .bat no los baja). 40 núcleos cargan con
+    `--core-info`; 46 sistemas definidos. Prueba con archivos falsos (`--check-rom`, plataforma normal
+    de Qt, base aparte): PPSSPP "Using OpenGL backend", Dolphin "SetHWRender - using OpenGL 3.0",
+    Supermodel "OpenGL 4.1"; PS2 se detiene antes por falta de BIOS (`system/pcsx2/bios/`) y Azahar al
+    leer el archivo. **Ningún juego real probado.** Ojo: PPSSPP da `[check] OK` aunque el archivo sea
+    basura (carga en segundo plano), y Dolphin dejó el proceso colgado al fallar la carga (hubo que
+    matarlo): hay que mirarlo con un juego de verdad.
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

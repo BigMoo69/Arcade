@@ -189,7 +189,13 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "[channelf]\nnombre = FAIRCHILD CHANNEL F\nnucleo = freechaf_libretro.dll\ncarpeta = channelf\nextensiones = chf,bin,zip\n\n"
            "[supervision]\nnombre = WATARA SUPERVISION\nnucleo = potator_libretro.dll\ncarpeta = supervision\nextensiones = sv,zip\n\n"
            "[cdi]\nnombre = PHILIPS CD-I\nnucleo = same_cdi_libretro.dll\ncarpeta = cdi\nextensiones = chd,cue,iso\n\n"
-           "[nds]\nnombre = NINTENDO DS\nnucleo = melondsds_libretro.dll\ncarpeta = nds\nextensiones = nds,zip\n";
+           "[nds]\nnombre = NINTENDO DS\nnucleo = melondsds_libretro.dll\ncarpeta = nds\nextensiones = nds,zip\n\n"
+           "[psp]\nnombre = PSP\nnucleo = ppsspp_libretro.dll\ncarpeta = psp\nextensiones = iso,cso,pbp,chd\n\n"
+           "[gamecube]\nnombre = GAMECUBE\nnucleo = dolphin_libretro.dll\ncarpeta = gamecube\nextensiones = iso,gcm,rvz,gcz,ciso\n\n"
+           "[wii]\nnombre = NINTENDO WII\nnucleo = dolphin_libretro.dll\ncarpeta = wii\nextensiones = iso,wbfs,rvz,gcz,wad\n\n"
+           "[ps2]\nnombre = PLAYSTATION 2\nnucleo = pcsx2_libretro.dll\ncarpeta = ps2\nextensiones = iso,chd,cso,gz\n\n"
+           "[3ds]\nnombre = NINTENDO 3DS\nnucleo = azahar_libretro.dll\ncarpeta = 3ds\nextensiones = 3ds,cci,cxi,3dsx,app\n\n"
+           "[model3]\nnombre = SEGA MODEL 3\nnucleo = supermodel_libretro.dll\ncarpeta = model3\nextensiones = zip\n";
 }
 
 void GameListModel::loadStatus()

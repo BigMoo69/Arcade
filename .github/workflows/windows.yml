@@ -50,7 +50,7 @@ jobs:
           Copy-Item LEEME.txt dist/
           # Núcleos libretro: fbneo (arcade) y los sistemas de cores/sistemas.ini
           foreach ($c in 'fbneo','snes9x','genesis_plus_gx','fceumm','gambatte','mgba','mednafen_pce_fast','mame2003_plus','pcsx_rearmed','flycast','mupen64plus_next',
-                              'picodrive','mednafen_saturn','mednafen_vb','pokemini','gw','mednafen_supergrafx','mednafen_pcfx','mednafen_ngp','neocd','mednafen_wswan','handy','stella','a5200','prosystem','virtualjaguar','opera','gearcoleco','freeintv','vecx','o2em','freechaf','potator','same_cdi','melondsds') {
+                              'picodrive','mednafen_saturn','mednafen_vb','pokemini','gw','mednafen_supergrafx','mednafen_pcfx','mednafen_ngp','neocd','mednafen_wswan','handy','stella','a5200','prosystem','virtualjaguar','opera','gearcoleco','freeintv','vecx','o2em','freechaf','potator','same_cdi','melondsds','ppsspp','dolphin','pcsx2','azahar','supermodel') {
             try {
               Invoke-WebRequest "https://buildbot.libretro.com/nightly/windows/x86_64/latest/${c}_libretro.dll.zip" -OutFile "$c.zip"
               Expand-Archive "$c.zip" -DestinationPath dist/cores -Force

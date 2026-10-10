@@ -55,10 +55,12 @@ OTROS SISTEMAS
   nes, snes, megadrive, mastersystem, gb, gba, pcengine, psx, mame, dreamcast, naomi, n64,
   gamegear, sg1000, segacd, sega32x, saturn, fds, virtualboy, pokemini, gameandwatch, supergrafx,
   pcfx, ngp, neogeocd, wonderswan, lynx, atari2600, atari5200, atari7800, jaguar, 3do, coleco,
-  intellivision, vectrex, odyssey2, channelf, supervision, cdi y nds.
+  intellivision, vectrex, odyssey2, channelf, supervision, cdi, nds,
+  psp, gamecube, wii, ps2, 3ds y model3 (estos seis usan la tarjeta gráfica: OpenGL 3.3 o superior).
   Nintendo DS: la pantalla táctil se usa con el mouse (clic = tocar).
   La pantalla de sistemas dice en qué carpeta va cada uno.
-  Se definen en cores\sistemas.ini. Algunos necesitan BIOS en la carpeta system  (PlayStation; Dreamcast y Naomi en system\dc\; PC Engine CD: syscard3.pce).
+  Se definen en cores\sistemas.ini. Algunos necesitan BIOS en la carpeta system  (PlayStation; Dreamcast y Naomi en system\dc\; PC Engine CD: syscard3.pce;
+  PlayStation 2 en system\pcsx2\bios\).
 
 PREVIEWS (opcional)
   media\videos\<rom>.mp4     video que se reproduce al elegir el juego

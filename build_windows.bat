@@ -50,7 +50,7 @@ REM fbneo = arcade (los .zip sueltos en roms\). Los demas son los sistemas de co
 REM Solo se descargan los que falten: un nucleo ya instalado no se reemplaza, porque una version
 REM nueva puede exigir ROMs distintos. Para actualizar uno, borra su .dll de dist\cores y vuelve a ejecutar.
 set CORES=fbneo snes9x genesis_plus_gx fceumm gambatte mgba mednafen_pce_fast mame2003_plus pcsx_rearmed flycast mupen64plus_next ^
- picodrive mednafen_saturn mednafen_vb pokemini gw mednafen_supergrafx mednafen_pcfx mednafen_ngp neocd mednafen_wswan handy stella a5200 prosystem virtualjaguar opera gearcoleco freeintv vecx o2em freechaf potator same_cdi melondsds
+ picodrive mednafen_saturn mednafen_vb pokemini gw mednafen_supergrafx mednafen_pcfx mednafen_ngp neocd mednafen_wswan handy stella a5200 prosystem virtualjaguar opera gearcoleco freeintv vecx o2em freechaf potator same_cdi melondsds ppsspp dolphin pcsx2 azahar supermodel
 for %%c in (%CORES%) do (
     if not exist dist\cores\%%c_libretro.dll (
         echo Descargando nucleo %%c...

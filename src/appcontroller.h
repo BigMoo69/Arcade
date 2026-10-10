@@ -7,12 +7,17 @@
 class LibretroCore;
 class Gamepad;
 class GameListModel;
+class QProcess;
 
 // Puente entre QML y el resto: lanzar/cerrar juegos, ajustes y mensajes.
 class AppController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool gameRunning READ gameRunning NOTIFY gameRunningChanged)
+    // Emulador aparte (programa externo de sistemas.ini) en marcha, y su nombre
+    Q_PROPERTY(bool externalRunning READ externalRunning NOTIFY externalRunningChanged)
+    Q_PROPERTY(QString externalName READ externalName NOTIFY externalRunningChanged)
+    Q_PROPERTY(QString externalTitle READ externalTitle NOTIFY externalRunningChanged)
     Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY gameRunningChanged)
     Q_PROPERTY(bool paused READ paused NOTIFY pausedChanged)
     Q_PROPERTY(bool confirmingExit READ confirmingExit NOTIFY confirmingExitChanged)
@@ -55,6 +60,9 @@ public:
                   GameListModel *games, QObject *parent = nullptr);
 
     bool gameRunning() const;
+    bool externalRunning() const { return m_ext != nullptr; }
+    QString externalName() const { return m_extName; }
+    QString externalTitle() const { return m_ext ? m_title : QString(); }
     bool paused() const;
     bool confirmingExit() const { return m_confirmExit; }
     QString currentTitle() const { return m_title; }
@@ -114,6 +122,7 @@ public:
 
 signals:
     void gameRunningChanged();
+    void externalRunningChanged();
     void pausedChanged();
     void confirmingExitChanged();
     void fastForwardChanged();
@@ -150,5 +159,10 @@ private:
     bool m_pausedBeforeConfirm = false;
     QString m_title, m_rom, m_coreIni, m_bezelImage;
     QElapsedTimer m_playClock;
+    QProcess *m_ext = nullptr;
+    QString m_extName;
+    bool m_extStopping = false; // lo cerró el usuario desde el Arcade
+    void launchExternal(const QVariantMap &g);
+    void endExternal(const QString &problem);
     int m_stateRev = 0, m_optionsRev = 0;
 };

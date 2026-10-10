@@ -68,7 +68,7 @@ Window {
     // Si nadie toca nada durante un rato, el menú va saltando solo de juego en juego como una
     // máquina de salón. Cualquier botón, tecla o movimiento del mouse lo detiene.
     property bool attractOn: false
-    readonly property bool menuIdle: !App.gameRunning && !optionsOpen && !searchOpen && !remapOpen
+    readonly property bool menuIdle: !App.gameRunning && !App.externalRunning && !optionsOpen && !searchOpen && !remapOpen
                                      && errorText === "" && (homeOpen || Games.count > 1)
     Timer {
         id: idleTimer
@@ -95,6 +95,7 @@ Window {
 
     // ---------------- Entrada unificada (teclado + mandos) ----------------
     function act(a) {
+        if (App.externalRunning) return // hay un emulador aparte en marcha
         if (App.confirmingExit) { sfx(a); exitDlg.handle(a); return }
         if (App.paused) {
             if (Pad.capturing) return
@@ -182,7 +183,7 @@ Window {
         source: App.musicUrl
         loops: MediaPlayer.Infinite
         audioOutput: AudioOutput { volume: App.volume / 100 * 0.35 }
-        readonly property bool wanted: App.menuMusic && App.musicUrl !== "" && !App.gameRunning
+        readonly property bool wanted: App.menuMusic && App.musicUrl !== "" && !App.gameRunning && !App.externalRunning
         onWantedChanged: wanted ? play() : pause()
         Component.onCompleted: if (wanted) play()
     }
@@ -239,6 +240,7 @@ Window {
             map[Qt.Key_PageUp] = "pageUp"; map[Qt.Key_PageDown] = "pageDown"
             map[Qt.Key_Return] = "accept"; map[Qt.Key_Enter] = "accept"
             map[Qt.Key_Escape] = "back"; map[Qt.Key_Backspace] = "back"
+            if (App.externalRunning) { if (e.key === Qt.Key_Escape) App.requestExit(); e.accepted = true; return }
             if (win.wake()) { e.accepted = true; return }
             if (e.key === Qt.Key_F1 && !Pad.capturing && !win.searchOpen) { win.act("options"); e.accepted = true; return }
             // Escribir en la pantalla de sistemas busca entre todos los juegos
@@ -1781,6 +1783,32 @@ Window {
                 anchors { bottom: parent.bottom; bottomMargin: 20 * u; horizontalCenter: parent.horizontalCenter }
                 text: "Ⓐ / ENTER PARA CONTINUAR"; color: win.cAccent
                 font.family: arcadeFont; font.pixelSize: 16 * u
+            }
+        }
+    }
+
+    // ---------------- Emulador aparte en marcha ----------------
+    Rectangle {
+        anchors.fill: parent; z: 55
+        visible: App.externalRunning
+        color: "#f0000008"
+        MouseArea { anchors.fill: parent; hoverEnabled: true; onWheel: {} } // nada de lo de abajo responde
+        Column {
+            anchors.centerIn: parent; spacing: 14 * u; width: parent.width * 0.8
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                text: App.externalTitle
+                color: win.cAccent; font.family: arcadeFont; font.pixelSize: 38 * u; font.bold: true
+            }
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter
+                text: "JUGANDO EN " + App.externalName
+                color: "white"; font.family: arcadeFont; font.pixelSize: 24 * u
+            }
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                text: "CIERRA EL EMULADOR PARA VOLVER AL MENÚ\nO MANTÉN SELECT + START DOS SEGUNDOS  ·  ESC AQUÍ LO CIERRA"
+                color: win.cDim; font.family: arcadeFont; font.pixelSize: 17 * u
             }
         }
     }

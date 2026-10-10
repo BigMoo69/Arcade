@@ -357,7 +357,14 @@ void Gamepad::poll()
         const uint16_t combo = bit(RETRO_DEVICE_ID_JOYPAD_SELECT) | bit(RETRO_DEVICE_ID_JOYPAD_START);
         if ((p.buttons & combo) == combo || p.guide) exitCombo = true;
     }
-    if (exitCombo && !m_exitLatch && m_mode == GameMode) {
+    if (m_mode == ExternalMode) {
+        // Con un emulador aparte no hay aviso de confirmación: hay que mantenerlo 1,5 s
+        if (!exitCombo) { m_exitLatch = false; m_exitHold.invalidate(); }
+        else if (!m_exitLatch) {
+            if (!m_exitHold.isValid()) m_exitHold.start();
+            else if (m_exitHold.elapsed() >= 1500) { m_exitLatch = true; emit exitGameRequested(); }
+        }
+    } else if (exitCombo && !m_exitLatch && m_mode == GameMode) {
         m_exitLatch = true;
         emit exitGameRequested();
     } else if (!exitCombo) {
@@ -431,7 +438,7 @@ QString Gamepad::firstPadName() const
 void Gamepad::menuTick()
 {
     if (m_mode != MenuMode) {
-        if (m_paused) poll(); // para poder quitar la pausa o salir
+        if (m_paused || m_mode == ExternalMode) poll(); // para poder quitar la pausa o salir
         return;
     }
     pumpEvents();

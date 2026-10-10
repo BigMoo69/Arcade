@@ -132,6 +132,15 @@ int main(int argc, char *argv[])
     if (testHidden)
         win->setFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus | Qt::WindowStaysOnBottomHint);
     QObject::connect(&controller, &AppController::settingsChanged, win, applyWindowMode);
+    // Emulador aparte: el Arcade se quita de en medio y vuelve al frente cuando se cierra
+    QObject::connect(&controller, &AppController::externalRunningChanged, win, [&, testHidden] {
+        if (testHidden || QGuiApplication::platformName() == QLatin1String("offscreen")) return;
+        if (controller.externalRunning()) { win->showMinimized(); return; }
+        shownFullscreen = -1;
+        applyWindowMode();
+        win->raise();
+        win->requestActivate();
+    });
     applyWindowMode();
     if (testHidden) win->setPosition(-8000, -8000);
 

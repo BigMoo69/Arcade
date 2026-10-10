@@ -110,6 +110,7 @@ void GameListModel::loadSystemDefs()
     in.setEncoding(QStringConverter::Utf8);
     SystemDef cur;
     auto flush = [&] {
+        if (!cur.program.isEmpty()) cur.core = u'@' + cur.id; // emulador aparte
         if (!cur.id.isEmpty() && !cur.core.isEmpty() && !cur.exts.isEmpty()) {
             if (cur.folder.isEmpty()) cur.folder = cur.id;
             if (cur.name.isEmpty()) cur.name = cur.id.toUpper();
@@ -127,12 +128,16 @@ void GameListModel::loadSystemDefs()
         const QString val = line.mid(eq + 1).section(u';', 0, 0).trimmed();
         if (key == u"nombre") cur.name = val.toUpper();
         else if (key == u"nucleo") cur.core = val;
+        else if (key == u"programa") cur.program = val;
+        else if (key == u"argumentos") cur.args = val;
+        else if (key == u"juegos") cur.romDir = QDir::fromNativeSeparators(val);
         else if (key == u"carpeta") cur.folder = val;
         else if (key == u"extensiones")
             for (const QString &e : val.toLower().split(u',', Qt::SkipEmptyParts)) cur.exts << e.trimmed();
     }
     flush();
-    for (const SystemDef &d : m_defs) QDir(m_base).mkpath(QStringLiteral("roms/") + d.folder);
+    for (const SystemDef &d : m_defs)
+        if (d.romDir.isEmpty()) QDir(m_base).mkpath(QStringLiteral("roms/") + d.folder);
 }
 
 void GameListModel::writeDefaultSystems(const QString &file) const
@@ -149,6 +154,17 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "; aparece en la lista pero avisa al intentar abrirlo.\n"
            "; Sirven los nucleos que dibujan por software o con OpenGL (no los que exigen Vulkan).\n"
            "; Para agregar un sistema copia un bloque y cambia los cuatro valores.\n"
+           ";\n"
+           "; EMULADORES APARTE: en vez de 'nucleo' se puede poner 'programa' (la ruta del .exe) y, si hace\n"
+           "; falta, 'argumentos' ({rom} se cambia por el juego elegido). Al cerrar el emulador se vuelve al menu.\n"
+           "; Para usarlo quita los ';' del ejemplo y pon tu ruta:\n"
+           ";   [wiiu]\n"
+           ";   nombre = WII U\n"
+           ";   programa = C:\\Emuladores\\Cemu\\Cemu.exe\n"
+           ";   argumentos = -f -g \"{rom}\"\n"
+           ";   carpeta = wiiu\n"
+           ";   extensiones = wua,wud,wux,rpx\n"
+           "; Si los juegos estan en otra carpeta del PC, anade:  juegos = D:\\Mis juegos\\Wii U\n"
            "\n"
            "[nes]\nnombre = NINTENDO NES\nnucleo = fceumm_libretro.dll\ncarpeta = nes\nextensiones = nes,zip\n\n"
            "[snes]\nnombre = SUPER NINTENDO\nnucleo = snes9x_libretro.dll\ncarpeta = snes\nextensiones = sfc,smc,zip\n\n"
@@ -375,6 +391,17 @@ void GameListModel::cycleSystem(int direction)
     setSystem(next == 0 ? QString() : m_systems.at(next - 1));
 }
 
+bool GameListModel::externalCommand(const QString &core, QString *program, QString *args) const
+{
+    for (const SystemDef &d : m_defs) {
+        if (d.core != core || d.program.isEmpty()) continue;
+        *program = d.program;
+        *args = d.args;
+        return true;
+    }
+    return false;
+}
+
 QVariantList GameListModel::systemCards() const
 {
     struct Acc { int count = 0, tries = 0; QStringList images; };
@@ -508,7 +535,7 @@ void GameListModel::rescan()
     // capturas van en media/snaps/snes/mario.png y los guardados en saves/snes/.
     loadSystemDefs();
     for (const SystemDef &d : m_defs) {
-        QDir dir(m_base + QStringLiteral("/roms/") + d.folder);
+        QDir dir(d.romDir.isEmpty() ? m_base + QStringLiteral("/roms/") + d.folder : d.romDir);
         if (!dir.exists()) continue;
         QStringList filters;
         for (const QString &e : d.exts) filters << QStringLiteral("*.") + e;

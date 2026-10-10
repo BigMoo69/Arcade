@@ -318,6 +318,24 @@ El usuario habla español; responde en español, conciso y directo.
     sistema, año) sobre todos los juegos; Ⓐ/Enter juega desde ahí y Ⓑ/Esc limpia y vuelve a los sistemas
     de un solo paso. El teclado en pantalla (`search`) cambia de padre (`home` / `listPanel`) con
     posición explícita en vez de anclas. `goHome()` limpia la búsqueda.
+  - *Emuladores aparte / programas externos (2026-10-10):* en `sistemas.ini` un bloque puede llevar
+    `programa = <exe>` (+ `argumentos`, con `{rom}`; si falta, el juego va al final) en vez de `nucleo`.
+    `GameListModel` marca esos juegos con `core = "@<id>"` (`externalCommand()`); `AppController::launch`
+    los desvía a `launchExternal()` (QProcess, carpeta de trabajo = la del exe). Mientras corre:
+    `App.externalRunning`, el mando pasa a `Gamepad::ExternalMode` (solo vigila Select+Start/Guide
+    mantenido 1,5 s → `requestExit()` hace `terminate()` y `kill()` a los 2,5 s), el menú no responde
+    (overlay "JUGANDO EN …") y `main.cpp` minimiza la ventana y la restaura al acabar. Al cerrar:
+    `notePlayed` + ✔ si duró ≥10 s; error si no existe el exe, no arranca o se cierra en <3 s.
+    Probado offscreen con `cmd.exe`/`ping` como emulador falso (`ext_test.ps1`): arranque, vuelta al
+    menú, los tres errores y el cierre desde el Arcade. **Sin probar:** un emulador real, minimizar y
+    restaurar la ventana (se omite en offscreen) y el cierre con el mando. `kill()` solo mata el proceso
+    lanzado, no sus hijos. El `sistemas.ini` del usuario tiene ejemplos comentados (Wii U, PS3, Xbox).
+    Clave `juegos = <ruta>` (`SystemDef::romDir`): carpeta de juegos fuera de `roms/` (vale también
+    para sistemas con núcleo); `carpeta` sigue dando el prefijo del nombre interno (`xbox/<juego>`).
+    El usuario tiene xemu y Xenia en `Desktop\Emuladores\Xbox|Xbox 360` con los ISO en `Juegos\`
+    (10 de Xbox, 6 de 360, ~90 GB): bloques `[xbox]` y `[xbox360]` activos en su `sistemas.ini`; la
+    lista muestra los 16. **No se ha lanzado ninguno** (abriría el emulador en su pantalla): los
+    argumentos (`-full-screen -dvd_path`, `--fullscreen=true`) están sin comprobar.
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

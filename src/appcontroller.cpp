@@ -12,6 +12,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QTextStream>
 #include <QTimer>
@@ -153,6 +154,13 @@ void AppController::togglePause()
 
 void AppController::requestExit()
 {
+    if (m_ext) { // emulador aparte: se le pide cerrar y, si no hace caso, se le obliga
+        m_extStopping = true;
+        m_ext->terminate();
+        QProcess *p = m_ext;
+        QTimer::singleShot(2500, this, [this, p] { if (m_ext == p && p->state() != QProcess::NotRunning) p->kill(); });
+        return;
+    }
     if (!m_core->isRunning() || m_confirmExit) return;
     m_confirmExit = true;
     m_pausedBeforeConfirm = m_core->isPaused();
@@ -390,7 +398,9 @@ bool AppController::ensureCore(QString coreFile)
 void AppController::launch(int row)
 {
     const QVariantMap g = m_games->get(row);
-    if (g.isEmpty() || !ensureCore(g.value(QStringLiteral("core")).toString())) return;
+    if (g.isEmpty() || m_ext) return;
+    if (g.value(QStringLiteral("core")).toString().startsWith(u'@')) { launchExternal(g); return; }
+    if (!ensureCore(g.value(QStringLiteral("core")).toString())) return;
 
     m_title = g.value(QStringLiteral("title")).toString();
     m_rom = g.value(QStringLiteral("rom")).toString();
@@ -456,6 +466,68 @@ void AppController::launch(int row)
     emit statesChanged();
     emit coreOptionsChanged();
     emit gameRunningChanged();
+}
+
+// Sistemas con "programa" en sistemas.ini: el juego lo corre un emulador aparte. El Arcade espera
+// a que se cierre (o lo cierra con Select+Start mantenido) y vuelve al menú.
+void AppController::launchExternal(const QVariantMap &g)
+{
+    QString program, args;
+    if (!m_games->externalCommand(g.value(QStringLiteral("core")).toString(), &program, &args)) return;
+    if (QDir::isRelativePath(program)) program = m_base + u'/' + program;
+    if (!QFileInfo(program).isFile()) {
+        emit error(QStringLiteral("No encuentro el emulador de este sistema:\n%1\n\nRevisa la línea \"programa\" "
+                                  "de su bloque en cores\\sistemas.ini.").arg(QDir::toNativeSeparators(program)));
+        return;
+    }
+    const QString rom = QDir::toNativeSeparators(g.value(QStringLiteral("path")).toString());
+    QStringList list = QProcess::splitCommand(args);
+    bool used = false;
+    for (QString &a : list) {
+        used |= a.contains(QLatin1String("{rom}"));
+        a.replace(QLatin1String("{rom}"), rom);
+    }
+    if (!used) list << rom; // sin {rom}: el juego va al final
+
+    m_title = g.value(QStringLiteral("title")).toString();
+    m_rom = g.value(QStringLiteral("rom")).toString();
+    for (int i = 0; i < m_games->rowCount(); ++i) // posición en la lista completa, para volver al mismo juego
+        if (m_games->data(m_games->index(i), GameListModel::RomRole).toString() == m_rom) { setLastIndex(m_games->sourceRow(i)); break; }
+    m_extName = QFileInfo(program).completeBaseName().toUpper();
+    m_ext = new QProcess(this);
+    m_ext->setWorkingDirectory(QFileInfo(program).absolutePath());
+    m_ext->setProgram(program);
+    m_ext->setArguments(list);
+    connect(m_ext, &QProcess::errorOccurred, this, [this](QProcess::ProcessError e) {
+        if (e == QProcess::FailedToStart)
+            endExternal(QStringLiteral("No se pudo abrir el emulador %1.\n\nComprueba que el programa funciona por su cuenta.").arg(m_extName));
+    });
+    connect(m_ext, &QProcess::finished, this, [this] { endExternal(QString()); });
+    m_extStopping = false;
+    m_playClock.start();
+    m_pad->setMode(Gamepad::ExternalMode);
+    emit externalRunningChanged();
+    m_ext->start();
+}
+
+void AppController::endExternal(const QString &problem)
+{
+    if (!m_ext) return;
+    m_ext->disconnect(this);
+    m_ext->deleteLater();
+    m_ext = nullptr;
+    const qint64 secs = m_playClock.elapsed() / 1000;
+    m_playClock.invalidate();
+    m_pad->setMode(Gamepad::MenuMode);
+    if (problem.isEmpty() && secs >= 10) { // igual que en los juegos normales: las pruebas cortas no cuentan
+        m_games->notePlayed(m_rom, secs);
+        m_games->setStatus(m_rom, 1);
+    }
+    emit externalRunningChanged();
+    if (!problem.isEmpty()) emit error(problem);
+    else if (secs < 3 && !m_extStopping)
+        emit error(QStringLiteral("%1 se cerró nada más abrirse.\n\nRevisa el juego y la línea \"argumentos\" "
+                                  "de su sistema en cores\\sistemas.ini.").arg(m_extName));
 }
 
 void AppController::stopGame()

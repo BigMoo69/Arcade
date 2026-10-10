@@ -19,7 +19,8 @@ class Gamepad : public QObject
     Q_PROPERTY(bool capturing READ capturing NOTIFY capturingChanged)
     Q_PROPERTY(int mapRevision READ mapRevision NOTIFY mappingChanged) // cambia con cada remapeo
 public:
-    enum Mode { MenuMode, GameMode };
+    // ExternalMode: hay un emulador aparte en marcha; solo se vigila Select+Start mantenido para cerrarlo
+    enum Mode { MenuMode, GameMode, ExternalMode };
     static constexpr int MaxPlayers = 4;
 
     // Botones físicos del mando (posiciones tipo Xbox) y acciones del juego que se les pueden asignar.
@@ -133,6 +134,7 @@ private:
     qint64 m_nextRepeat = 0;
     uint16_t m_prevMenuMask = 0;
     bool m_exitLatch = false;
+    QElapsedTimer m_exitHold;
     bool m_pauseLatch = false;
 
     // Remapeo: m_maps[jugador][acción] = botón físico

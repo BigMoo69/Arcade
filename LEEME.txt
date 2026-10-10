@@ -62,6 +62,21 @@ OTROS SISTEMAS
   Se definen en cores\sistemas.ini. Algunos necesitan BIOS en la carpeta system  (PlayStation; Dreamcast y Naomi en system\dc\; PC Engine CD: syscard3.pce;
   PlayStation 2 en system\pcsx2\bios\).
 
+EMULADORES APARTE (Wii U, PS3, Xbox...)
+  Para sistemas que no tienen núcleo, el Arcade puede abrir otro emulador instalado en el PC.
+  En cores\sistemas.ini añade un bloque con 'programa' (ruta del .exe) en vez de 'nucleo':
+      [wiiu]
+      nombre = WII U
+      programa = C:\Emuladores\Cemu\Cemu.exe
+      argumentos = -f -g "{rom}"
+      carpeta = wiiu
+      extensiones = wua,wud,wux,rpx
+  Los juegos van en roms\<carpeta>, o donde ya los tengas si añades la línea
+      juegos = D:\Mis juegos\Wii U
+  Al cerrar el emulador vuelves al menú; también se cierra
+  manteniendo View+Menu (Select+Start) dos segundos. Dentro de ese emulador mandan sus propios
+  controles y menús: la pausa, los guardados y los efectos del Arcade no se aplican.
+
 PREVIEWS (opcional)
   media\videos\<rom>.mp4     video que se reproduce al elegir el juego
   media\snaps\<rom>.png      captura (si no hay video)

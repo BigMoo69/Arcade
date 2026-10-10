@@ -785,6 +785,35 @@ Window {
                 opacity: 0.22
             }
 
+            // Barra de búsqueda: busca en todos los sistemas a la vez. Escribir con el teclado, clic
+            // o Ⓧ/□ llevan a la lista de todos los juegos con la búsqueda abierta.
+            Rectangle {
+                id: homeSearch
+                anchors { top: parent.top; topMargin: 16 * u; horizontalCenter: parent.horizontalCenter }
+                width: Math.min(parent.width - 88 * u, 900 * u); height: 46 * u; radius: 23 * u
+                color: "#c0000000"; border.color: homeSearchArea.containsMouse ? win.cAccent : win.cBorder; border.width: 2 * u
+                Item {
+                    id: homeLens
+                    anchors.verticalCenter: parent.verticalCenter; x: 18 * u
+                    width: 24 * u; height: 24 * u
+                    Rectangle { x: 1 * u; y: 1 * u; width: 15 * u; height: 15 * u; radius: 8 * u; color: "transparent"
+                                border.color: win.cDim; border.width: 2.5 * u }
+                    Rectangle { x: 13 * u; y: 16 * u; width: 10 * u; height: 3 * u; rotation: 45; radius: 1 * u; color: win.cDim }
+                }
+                Text {
+                    anchors { verticalCenter: parent.verticalCenter; left: homeLens.right; leftMargin: 10 * u; right: homeSearchKey.left; rightMargin: 8 * u }
+                    elide: Text.ElideRight
+                    text: "ESCRIBE PARA BUSCAR UN JUEGO EN TODOS LOS SISTEMAS…"
+                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 18 * u
+                }
+                Text {
+                    id: homeSearchKey
+                    anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 18 * u }
+                    text: "Ⓧ/□"
+                    color: win.cAccent; font.family: arcadeFont; font.pixelSize: 16 * u; font.bold: true
+                }
+                MouseArea { id: homeSearchArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.act("search") }
+            }
             // Cuadrícula de sistemas: se recorre en las cuatro direcciones; la tarjeta elegida "salta"
             // (crece, se ilumina y queda por encima de las vecinas)
             GridView {
@@ -792,9 +821,9 @@ Window {
                 readonly property int cols: 5
                 readonly property int rows: Math.max(1, Math.floor(height / cellHeight))
                 readonly property real cu: Math.min(u, cellWidth / 360) // escala del contenido de la tarjeta
-                anchors { top: parent.top; left: parent.left; right: parent.right; bottom: homeInfo.top
+                anchors { top: homeSearch.bottom; left: parent.left; right: parent.right; bottom: homeInfo.top
                           leftMargin: 44 * u; rightMargin: 44 * u }
-                topMargin: 26 * u; bottomMargin: 26 * u
+                topMargin: 22 * u; bottomMargin: 26 * u
                 cellWidth: width / cols
                 cellHeight: cellWidth * 0.74
                 clip: true

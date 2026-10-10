@@ -310,6 +310,9 @@ El usuario habla español; responde en español, conciso y directo.
     leer el archivo. **Ningún juego real probado.** Ojo: PPSSPP da `[check] OK` aunque el archivo sea
     basura (carga en segundo plano), y Dolphin dejó el proceso colgado al fallar la carga (hubo que
     matarlo): hay que mirarlo con un juego de verdad.
+  - *Barra de búsqueda en la pantalla de sistemas (2026-10-09):* `homeSearch` sobre la cuadrícula; clic
+    o Ⓧ/□ = `win.act("search")` (pasa a TODOS con el teclado en pantalla) y escribir con el teclado
+    busca directo, como antes. Probada offscreen (clic y `type:`).
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

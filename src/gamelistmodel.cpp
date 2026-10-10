@@ -161,7 +161,34 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "[mame]\nnombre = MAME\nnucleo = mame2003_plus_libretro.dll\ncarpeta = mame\nextensiones = zip\n\n"
            "[dreamcast]\nnombre = DREAMCAST\nnucleo = flycast_libretro.dll\ncarpeta = dreamcast\nextensiones = cdi,gdi,chd,cue,m3u\n\n"
            "[naomi]\nnombre = NAOMI / ATOMISWAVE\nnucleo = flycast_libretro.dll\ncarpeta = naomi\nextensiones = zip,7z,lst\n\n"
-           "[n64]\nnombre = NINTENDO 64\nnucleo = mupen64plus_next_libretro.dll\ncarpeta = n64\nextensiones = n64,z64,v64,zip\n";
+           "[n64]\nnombre = NINTENDO 64\nnucleo = mupen64plus_next_libretro.dll\ncarpeta = n64\nextensiones = n64,z64,v64,zip\n\n"
+           "[gamegear]\nnombre = GAME GEAR\nnucleo = genesis_plus_gx_libretro.dll\ncarpeta = gamegear\nextensiones = gg,zip\n\n"
+           "[sg1000]\nnombre = SG-1000\nnucleo = genesis_plus_gx_libretro.dll\ncarpeta = sg1000\nextensiones = sg,zip\n\n"
+           "[segacd]\nnombre = SEGA CD\nnucleo = genesis_plus_gx_libretro.dll\ncarpeta = segacd\nextensiones = cue,chd,iso,m3u\n\n"
+           "[sega32x]\nnombre = SEGA 32X\nnucleo = picodrive_libretro.dll\ncarpeta = sega32x\nextensiones = 32x,zip\n\n"
+           "[saturn]\nnombre = SEGA SATURN\nnucleo = mednafen_saturn_libretro.dll\ncarpeta = saturn\nextensiones = cue,chd,ccd,toc,m3u\n\n"
+           "[fds]\nnombre = FAMICOM DISK SYSTEM\nnucleo = fceumm_libretro.dll\ncarpeta = fds\nextensiones = fds,zip\n\n"
+           "[virtualboy]\nnombre = VIRTUAL BOY\nnucleo = mednafen_vb_libretro.dll\ncarpeta = virtualboy\nextensiones = vb,vboy,zip\n\n"
+           "[pokemini]\nnombre = POKEMON MINI\nnucleo = pokemini_libretro.dll\ncarpeta = pokemini\nextensiones = min,zip\n\n"
+           "[gameandwatch]\nnombre = GAME AND WATCH\nnucleo = gw_libretro.dll\ncarpeta = gameandwatch\nextensiones = mgw\n\n"
+           "[supergrafx]\nnombre = SUPERGRAFX\nnucleo = mednafen_supergrafx_libretro.dll\ncarpeta = supergrafx\nextensiones = sgx,pce,zip\n\n"
+           "[pcfx]\nnombre = PC-FX\nnucleo = mednafen_pcfx_libretro.dll\ncarpeta = pcfx\nextensiones = cue,chd,ccd,toc\n\n"
+           "[ngp]\nnombre = NEO GEO POCKET\nnucleo = mednafen_ngp_libretro.dll\ncarpeta = ngp\nextensiones = ngp,ngc,zip\n\n"
+           "[neogeocd]\nnombre = NEO GEO CD\nnucleo = neocd_libretro.dll\ncarpeta = neogeocd\nextensiones = cue,chd\n\n"
+           "[wonderswan]\nnombre = WONDERSWAN\nnucleo = mednafen_wswan_libretro.dll\ncarpeta = wonderswan\nextensiones = ws,wsc,zip\n\n"
+           "[lynx]\nnombre = ATARI LYNX\nnucleo = handy_libretro.dll\ncarpeta = lynx\nextensiones = lnx,zip\n\n"
+           "[atari2600]\nnombre = ATARI 2600\nnucleo = stella_libretro.dll\ncarpeta = atari2600\nextensiones = a26,bin,zip\n\n"
+           "[atari5200]\nnombre = ATARI 5200\nnucleo = a5200_libretro.dll\ncarpeta = atari5200\nextensiones = a52,bin,zip\n\n"
+           "[atari7800]\nnombre = ATARI 7800\nnucleo = prosystem_libretro.dll\ncarpeta = atari7800\nextensiones = a78,zip\n\n"
+           "[jaguar]\nnombre = ATARI JAGUAR\nnucleo = virtualjaguar_libretro.dll\ncarpeta = jaguar\nextensiones = j64,jag,zip\n\n"
+           "[3do]\nnombre = 3DO\nnucleo = opera_libretro.dll\ncarpeta = 3do\nextensiones = iso,cue,chd\n\n"
+           "[coleco]\nnombre = COLECOVISION\nnucleo = gearcoleco_libretro.dll\ncarpeta = coleco\nextensiones = col,zip\n\n"
+           "[intellivision]\nnombre = INTELLIVISION\nnucleo = freeintv_libretro.dll\ncarpeta = intellivision\nextensiones = int,bin,zip\n\n"
+           "[vectrex]\nnombre = VECTREX\nnucleo = vecx_libretro.dll\ncarpeta = vectrex\nextensiones = vec,zip\n\n"
+           "[odyssey2]\nnombre = ODYSSEY 2\nnucleo = o2em_libretro.dll\ncarpeta = odyssey2\nextensiones = bin,zip\n\n"
+           "[channelf]\nnombre = FAIRCHILD CHANNEL F\nnucleo = freechaf_libretro.dll\ncarpeta = channelf\nextensiones = chf,bin,zip\n\n"
+           "[supervision]\nnombre = WATARA SUPERVISION\nnucleo = potator_libretro.dll\ncarpeta = supervision\nextensiones = sv,zip\n\n"
+           "[cdi]\nnombre = PHILIPS CD-I\nnucleo = same_cdi_libretro.dll\ncarpeta = cdi\nextensiones = chd,cue,iso\n";
 }
 
 void GameListModel::loadStatus()
@@ -329,7 +356,7 @@ void GameListModel::notePlayed(const QString &rom, qint64 seconds)
     if (m_system == recentsName()) refilter();
     else
         for (int i = 0; i < m_view.size(); ++i)
-            if (at(i).rom == rom) emit dataChanged(index(i), index(i), { PlaysRole, PlayTimeRole });
+            if (at(i).rom == rom) emit dataChanged(index(i), index(i), { PlaysRole, PlayTimeRole, LastPlayedRole });
 }
 
 void GameListModel::cycleSystem(int direction)
@@ -371,7 +398,11 @@ QVariantList GameListModel::systemCards() const
         folders.insert(d.name, d.folder);
         if (!names.contains(d.name)) names << d.name; // definido pero todavía sin juegos
     }
-    std::sort(names.begin(), names.end(), [](const QString &a, const QString &b) { return QString::compare(a, b, Qt::CaseInsensitive) < 0; });
+    // Primero los que tienen juegos; los vacíos al final. Dentro de cada grupo, por nombre.
+    std::sort(names.begin(), names.end(), [&bySystem](const QString &a, const QString &b) {
+        const bool ea = bySystem.value(a).count == 0, eb = bySystem.value(b).count == 0;
+        return ea != eb ? eb : QString::compare(a, b, Qt::CaseInsensitive) < 0;
+    });
 
     auto card = [this](const QString &name, const QString &id, const Acc &a, const QString &folder) {
         QString slug;
@@ -560,6 +591,10 @@ QVariant GameListModel::data(const QModelIndex &index, int role) const
     case PlaysRole:    return m_stats.value(g.rom).plays;
     case PlayTimeRole: return m_stats.value(g.rom).secs;
     case PlayersRole:  return g.players >= 3 ? g.players : 0;
+    case LastPlayedRole: {
+        const qint64 last = m_stats.value(g.rom).last;
+        return last > 0 ? QDateTime::fromSecsSinceEpoch(last).toString(QStringLiteral("dd/MM/yyyy")) : QString();
+    }
     case VideoRole:
         return mediaFile(g.rom, { QStringLiteral("videos/"), QString() },
                          { QStringLiteral(".mp4"), QStringLiteral(".webm"), QStringLiteral(".avi"), QStringLiteral(".mkv") });
@@ -580,6 +615,7 @@ QHash<int, QByteArray> GameListModel::roleNames() const
         { MakerRole, "maker" }, { PathRole, "path" }, { VideoRole, "video" },
         { ImageRole, "image" }, { MarqueeRole, "marquee" }, { StatusRole, "status" }, { SystemRole, "system" }, { CoreRole, "core" },
         { FavoriteRole, "favorite" }, { PlaysRole, "plays" }, { PlayTimeRole, "playTime" }, { PlayersRole, "players" },
+        { LastPlayedRole, "lastPlayed" },
     };
 }
 

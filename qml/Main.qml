@@ -57,6 +57,8 @@ Window {
     property string errorText: ""
     readonly property var aspectNames: ["ORIGINAL", "PÍXELES EXACTOS", "ESTIRADA"]
     readonly property var crtNames: ["NO", "PLANO", "CURVO"]
+    readonly property var listViewNames: ["LISTA Y PREVIEW", "TABLA"]
+    readonly property bool tableView: App.listView === 1 // biblioteca en tabla, estilo Cemu
 
     // ---------------- Modo atracción ----------------
     // Si nadie toca nada durante un rato, el menú va saltando solo de juego en juego como una
@@ -350,8 +352,17 @@ Window {
         Rectangle {
             id: listPanel
             anchors { top: header.bottom; left: parent.left; bottom: footer.top; margins: 20 * u }
-            width: parent.width * 0.42
+            width: win.tableView ? parent.width - 40 * u : parent.width * 0.42
             visible: !win.homeOpen
+            // Columnas de la vista de tabla (las comparten el encabezado y las filas); se encogen en ventanas estrechas
+            readonly property real cs: Math.min(1, width / (1500 * u)) * u
+            readonly property real cThumb: 92 * u
+            readonly property real cSystem: 230 * cs
+            readonly property real cYear: 80 * cs
+            readonly property real cMaker: 260 * cs
+            readonly property real cPlayed: 170 * cs
+            readonly property real cLast: 150 * cs
+            readonly property real cMarks: 70 * cs
             color: win.cPanel; border.color: win.cBorder; border.width: 2 * u; radius: 6 * u
 
             // Barra de búsqueda siempre visible: se escribe directo con el teclado,
@@ -467,9 +478,34 @@ Window {
                     }
                 }
             }
+            // Encabezado de la tabla
+            Rectangle {
+                id: tableHead
+                anchors { top: search.bottom; left: parent.left; right: parent.right; margins: 8 * u }
+                height: win.tableView ? 30 * u : 0
+                visible: win.tableView
+                color: "#30ffffff"; radius: 3 * u
+                Row {
+                    anchors.fill: parent
+                    Repeater {
+                        model: [ { t: "", w: listPanel.cThumb },
+                                 { t: "JUEGO", w: tableHead.width - listPanel.cThumb - listPanel.cSystem - listPanel.cYear
+                                                   - listPanel.cMaker - listPanel.cPlayed - listPanel.cLast - listPanel.cMarks },
+                                 { t: "SISTEMA", w: listPanel.cSystem }, { t: "AÑO", w: listPanel.cYear },
+                                 { t: "FABRICANTE", w: listPanel.cMaker }, { t: "HAS JUGADO", w: listPanel.cPlayed },
+                                 { t: "ÚLTIMA VEZ", w: listPanel.cLast }, { t: "", w: listPanel.cMarks } ]
+                        Text {
+                            width: modelData.w; height: tableHead.height
+                            verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                            text: modelData.t
+                            font.family: arcadeFont; font.pixelSize: 14 * u; font.bold: true; color: win.cAccent
+                        }
+                    }
+                }
+            }
             ListView {
                 id: list
-                anchors { top: search.bottom; left: parent.left; right: parent.right; bottom: parent.bottom; margins: 8 * u }
+                anchors { top: tableHead.bottom; left: parent.left; right: parent.right; bottom: parent.bottom; margins: 8 * u }
                 clip: true
                 model: Games
                 currentIndex: win.current
@@ -488,8 +524,43 @@ Window {
                     }
                 }
                 delegate: Item {
-                    width: ListView.view.width; height: 34 * u
+                    width: ListView.view.width; height: (win.tableView ? 66 : 34) * u
                     readonly property bool sel: index === win.current
+                    // Fila de la vista de tabla: miniatura y columnas
+                    Row {
+                        anchors.fill: parent
+                        visible: win.tableView
+                        Item {
+                            width: listPanel.cThumb; height: parent.height
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 76 * u; height: 58 * u; color: "black"
+                                border.color: sel ? "white" : win.cBorder; border.width: 1 * u
+                                Image {
+                                    anchors.fill: parent; anchors.margins: 1 * u
+                                    source: win.tableView ? image : ""
+                                    asynchronous: true; cache: false
+                                    sourceSize.width: 160; sourceSize.height: 120
+                                    fillMode: Image.PreserveAspectFit
+                                }
+                            }
+                        }
+                        Repeater {
+                            model: [ { t: title, w: parent.width - listPanel.cThumb - listPanel.cSystem - listPanel.cYear
+                                                    - listPanel.cMaker - listPanel.cPlayed - listPanel.cLast - listPanel.cMarks, b: true },
+                                     { t: system, w: listPanel.cSystem }, { t: year, w: listPanel.cYear },
+                                     { t: maker, w: listPanel.cMaker },
+                                     { t: plays > 0 ? win.playTimeText(playTime) : "", w: listPanel.cPlayed },
+                                     { t: lastPlayed !== "" ? lastPlayed : "NUNCA", w: listPanel.cLast } ]
+                            Text {
+                                width: modelData.w; rightPadding: 10 * u; height: parent.height
+                                verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                text: modelData.t
+                                font.family: arcadeFont; font.pixelSize: (modelData.b ? 20 : 16) * u; font.bold: modelData.b === true && sel
+                                color: sel ? win.cOnAccent : modelData.b ? win.cText : win.cDim
+                            }
+                        }
+                    }
                     // Mouse: clic selecciona, doble clic juega, la rueda recorre la lista
                     MouseArea {
                         anchors.fill: parent
@@ -499,6 +570,7 @@ Window {
                     }
                     Text {
                         id: num
+                        visible: !win.tableView
                         anchors.verticalCenter: parent.verticalCenter
                         x: 10 * u; width: 64 * u
                         text: ("000" + (index + 1)).slice(-3)
@@ -524,6 +596,7 @@ Window {
                     }
                     Text {
                         anchors { verticalCenter: parent.verticalCenter; left: num.right; right: star.left; rightMargin: 6 * u }
+                        visible: !win.tableView
                         text: title
                         elide: Text.ElideRight
                         font.family: arcadeFont; font.pixelSize: 20 * u; font.bold: sel
@@ -548,7 +621,7 @@ Window {
         // ---------------- Preview ----------------
         Item {
             id: previewArea
-            visible: !win.homeOpen
+            visible: !win.homeOpen && !win.tableView
             anchors { top: header.bottom; left: listPanel.right; right: parent.right; bottom: footer.top; margins: 20 * u }
 
             Rectangle {
@@ -620,7 +693,7 @@ Window {
                 interval: 350
                 onTriggered: {
                     video.stop()
-                    video.source = win.game.video || ""
+                    video.source = win.tableView ? "" : (win.game.video || "")
                     if (video.source.toString() !== "" && !App.gameRunning) video.play()
                 }
             }
@@ -686,10 +759,13 @@ Window {
             function handle(a) {
                 var n = win.cards.length
                 if (n === 0) return
+                var c = cardGrid.cols, last = Math.floor((n - 1) / c) // última hilera
                 if (a === "left" || a === "systemPrev") index = (index + n - 1) % n
                 else if (a === "right" || a === "systemNext") index = (index + 1) % n
-                else if (a === "pageUp") index = Math.max(0, index - 5)
-                else if (a === "pageDown") index = Math.min(n - 1, index + 5)
+                else if (a === "up") { if (index >= c) index -= c }
+                else if (a === "down") { if (Math.floor(index / c) < last) index = Math.min(n - 1, index + c) }
+                else if (a === "pageUp") index = Math.max(index % c, index - c * cardGrid.rows)
+                else if (a === "pageDown") index = Math.min(n - 1, index + c * cardGrid.rows)
                 else if (a === "accept") win.enterSystem(card.id)
                 else if (a === "back") win.optionsOpen = true
                 else if (a === "search") { win.enterSystem(""); search.index = 0; win.searchOpen = true }
@@ -704,106 +780,143 @@ Window {
                 opacity: 0.22
             }
 
-            ListView {
-                id: cardRow
-                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; verticalCenterOffset: -50 * u }
-                height: 360 * u
-                orientation: ListView.Horizontal
+            // Cuadrícula de sistemas: se recorre en las cuatro direcciones; la tarjeta elegida "salta"
+            // (crece, se ilumina y queda por encima de las vecinas)
+            GridView {
+                id: cardGrid
+                readonly property int cols: 5
+                readonly property int rows: Math.max(1, Math.floor(height / cellHeight))
+                readonly property real cu: Math.min(u, cellWidth / 360) // escala del contenido de la tarjeta
+                anchors { top: parent.top; left: parent.left; right: parent.right; bottom: homeInfo.top
+                          leftMargin: 44 * u; rightMargin: 44 * u }
+                topMargin: 26 * u; bottomMargin: 26 * u
+                cellWidth: width / cols
+                cellHeight: cellWidth * 0.74
+                clip: true
                 model: win.cards.length
                 currentIndex: home.index
                 interactive: false
-                spacing: 26 * u
-                highlightMoveDuration: 180
-                preferredHighlightBegin: width / 2 - 140 * u
-                preferredHighlightEnd: width / 2 + 140 * u
-                highlightRangeMode: ListView.StrictlyEnforceRange
+                highlightMoveDuration: 160
+                preferredHighlightBegin: cellHeight * 0.15
+                preferredHighlightEnd: height - cellHeight * 0.15
+                highlightRangeMode: GridView.ApplyRange
                 delegate: Item {
+                    id: cell
                     readonly property var c: win.cards[index]
                     readonly property bool sel: index === home.index
-                    width: 280 * u; height: cardRow.height
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: 280 * u; height: 320 * u; radius: 10 * u
-                        scale: sel ? 1.1 : 0.9
-                        opacity: sel ? 1 : (c && c.count > 0 ? 0.75 : 0.45)
-                        Behavior on scale { NumberAnimation { duration: 140 } }
-                        color: win.cPanel
-                        border.color: sel ? win.cAccent : win.cBorder; border.width: (sel ? 4 : 2) * u
-                        // Imagen de la tarjeta
+                    readonly property real cu: cardGrid.cu
+                    width: cardGrid.cellWidth; height: cardGrid.cellHeight
+                    z: sel ? 10 : 1
+                    Item {
+                        anchors.fill: parent; anchors.margins: 13 * cu
+                        scale: sel ? 1.16 : 1
+                        Behavior on scale { NumberAnimation { duration: 190; easing.type: Easing.OutBack; easing.overshoot: 2.6 } }
+                        // Resplandor que late detrás de la tarjeta elegida
                         Rectangle {
-                            id: art
-                            anchors { top: parent.top; left: parent.left; right: parent.right; margins: 10 * u }
-                            height: 200 * u; color: "black"; clip: true; radius: 4 * u
-                            Image {
-                                anchors.fill: parent
-                                visible: c && c.logo !== ""
-                                source: c ? c.logo : ""
-                                fillMode: Image.PreserveAspectFit; smooth: true; asynchronous: true
+                            anchors.fill: parent; anchors.margins: -9 * cu
+                            radius: 16 * cu; color: win.cAccent
+                            visible: sel
+                            SequentialAnimation on opacity {
+                                loops: Animation.Infinite; running: sel
+                                NumberAnimation { to: 0.25; duration: 520 }
+                                NumberAnimation { to: 0.6; duration: 520 }
                             }
-                            Grid { // mosaico 2x2 con capturas de sus juegos
-                                anchors.fill: parent
-                                visible: c && c.logo === "" && c.images.length > 0
-                                columns: c && c.images.length > 1 ? 2 : 1
-                                Repeater {
-                                    model: c && c.logo === "" ? c.images.length : 0
-                                    Image {
-                                        width: art.width / (c.images.length > 1 ? 2 : 1)
-                                        height: art.height / (c.images.length > 2 ? 2 : 1)
-                                        source: c.images[index]
-                                        fillMode: Image.PreserveAspectCrop; smooth: false; asynchronous: true
-                                        sourceSize.width: 320
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 9 * cu
+                            color: sel ? Qt.lighter(win.cPanel, 1.5) : win.cPanel
+                            border.color: sel ? "white" : win.cBorder; border.width: (sel ? 3 : 2) * cu
+                        }
+                        Item {
+                            anchors.fill: parent
+                            opacity: sel ? 1 : (c && c.count > 0 ? 0.7 : 0.38)
+                            // Imagen de la tarjeta
+                            Rectangle {
+                                id: art
+                                anchors { top: parent.top; left: parent.left; right: parent.right; bottom: cardName.top
+                                          margins: 8 * cu; bottomMargin: 6 * cu }
+                                color: "black"; clip: true; radius: 4 * cu
+                                Image {
+                                    anchors.fill: parent
+                                    visible: c && c.logo !== ""
+                                    source: c ? c.logo : ""
+                                    fillMode: Image.PreserveAspectFit; smooth: true; asynchronous: true
+                                }
+                                Grid { // mosaico 2x2 con capturas de sus juegos
+                                    anchors.fill: parent
+                                    visible: c && c.logo === "" && c.images.length > 0
+                                    columns: c && c.images.length > 1 ? 2 : 1
+                                    Repeater {
+                                        model: c && c.logo === "" ? c.images.length : 0
+                                        Image {
+                                            width: art.width / (c.images.length > 1 ? 2 : 1)
+                                            height: art.height / (c.images.length > 2 ? 2 : 1)
+                                            source: c.images[index]
+                                            fillMode: Image.PreserveAspectCrop; smooth: false; asynchronous: true
+                                            sourceSize.width: 320
+                                        }
                                     }
                                 }
+                                Text { // sin imagen ni juegos: iniciales grandes
+                                    anchors.centerIn: parent
+                                    visible: c && c.logo === "" && c.images.length === 0
+                                    text: c ? c.name.split(/[ \/]+/).map(function (w) { return w.charAt(0) }).join("").substring(0, 3) : ""
+                                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 64 * cu; font.bold: true
+                                }
                             }
-                            Text { // sin imagen ni juegos: iniciales grandes
-                                anchors.centerIn: parent
-                                visible: c && c.logo === "" && c.images.length === 0
-                                text: c ? c.name.split(/[ \/]+/).map(function (w) { return w.charAt(0) }).join("").substring(0, 3) : ""
-                                color: win.cDim; font.family: arcadeFont; font.pixelSize: 80 * u; font.bold: true
+                            Text {
+                                id: cardName
+                                anchors { bottom: cardCount.top; left: parent.left; right: parent.right; margins: 8 * cu; bottomMargin: 1 * cu }
+                                horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight
+                                text: c ? c.name : ""
+                                color: sel ? win.cAccent : win.cText
+                                font.family: arcadeFont; font.pixelSize: 20 * cu; font.bold: true
                             }
-                        }
-                        Text {
-                            anchors { top: art.bottom; topMargin: 10 * u; left: parent.left; right: parent.right; margins: 8 * u }
-                            horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
-                            text: c ? c.name : ""
-                            color: sel ? win.cAccent : win.cText
-                            font.family: arcadeFont; font.pixelSize: 22 * u; font.bold: true
-                        }
-                        Text {
-                            anchors { bottom: parent.bottom; bottomMargin: 12 * u; horizontalCenter: parent.horizontalCenter }
-                            text: !c ? "" : c.count > 0 ? c.count + (c.count === 1 ? " JUEGO" : " JUEGOS") : "SIN JUEGOS AÚN"
-                            color: c && c.count > 0 ? win.cAccent2 : win.cDim
-                            font.family: arcadeFont; font.pixelSize: 17 * u; font.bold: true
+                            Text {
+                                id: cardCount
+                                anchors { bottom: parent.bottom; bottomMargin: 8 * cu; horizontalCenter: parent.horizontalCenter }
+                                text: !c ? "" : c.count > 0 ? c.count + (c.count === 1 ? " JUEGO" : " JUEGOS") : "SIN JUEGOS AÚN"
+                                color: c && c.count > 0 ? win.cAccent2 : win.cDim
+                                font.family: arcadeFont; font.pixelSize: 15 * cu; font.bold: true
+                            }
                         }
                         MouseArea {
                             anchors.fill: parent
                             onClicked: { if (sel) win.enterSystem(c.id); else home.index = index }
                             onDoubleClicked: { home.index = index; win.enterSystem(c.id) }
-                            onWheel: (w) => home.handle(w.angleDelta.y > 0 ? "left" : "right")
+                            onWheel: (w) => home.handle(w.angleDelta.y > 0 ? "up" : "down")
                         }
                     }
                 }
             }
+            // Barra de posición cuando hay más hileras de las que caben
+            Rectangle {
+                anchors { right: parent.right; rightMargin: 16 * u; top: cardGrid.top; bottom: cardGrid.bottom; topMargin: 26 * u; bottomMargin: 26 * u }
+                width: 6 * u; radius: 3 * u; color: "#40ffffff"
+                visible: cardGrid.visibleArea.heightRatio < 0.999
+                Rectangle {
+                    width: parent.width; radius: parent.radius; color: win.cAccent
+                    y: Math.max(0, Math.min(1, cardGrid.visibleArea.yPosition)) * parent.height
+                    height: Math.min(1, cardGrid.visibleArea.heightRatio) * parent.height
+                }
+            }
             Column {
-                anchors { top: cardRow.bottom; topMargin: 8 * u; horizontalCenter: parent.horizontalCenter }
-                spacing: 6 * u
+                id: homeInfo
+                anchors { bottom: parent.bottom; bottomMargin: 10 * u; horizontalCenter: parent.horizontalCenter }
+                spacing: 2 * u
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: home.card ? home.card.name : ""
+                    text: home.card ? home.card.name + "   ·   " + (home.index + 1) + " / " + win.cards.length : ""
                     color: "white"; style: Text.Outline; styleColor: "black"
-                    font.family: arcadeFont; font.pixelSize: 40 * u; font.bold: true
+                    font.family: arcadeFont; font.pixelSize: 28 * u; font.bold: true
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: !home.card ? "" : home.card.count > 0 ? "Ⓐ / ENTER PARA ENTRAR"
                           : home.card.folder !== "" ? "COPIA SUS JUEGOS EN  roms\\" + home.card.folder
                           : home.card.id.indexOf("FAVORITOS") >= 0 ? "MARCA JUEGOS CON Ⓨ/△ O F2 PARA VERLOS AQUÍ" : "AQUÍ SALDRÁN LOS ÚLTIMOS JUEGOS QUE ABRAS"
-                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 18 * u
-                }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: (home.index + 1) + " / " + win.cards.length
-                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 14 * u
+                    color: win.cDim; font.family: arcadeFont; font.pixelSize: 17 * u
                 }
             }
         }
@@ -821,7 +934,7 @@ Window {
                 spacing: 20 * u
                 Repeater {
                     model: win.homeOpen
-                           ? [ { t: "◄► ELEGIR SISTEMA", a: "" }, { t: "Ⓐ/✕ ENTRAR", a: "accept" },
+                           ? [ { t: "▲▼◄► ELEGIR SISTEMA", a: "" }, { t: "LB/RB PÁGINA", a: "" }, { t: "Ⓐ/✕ ENTRAR", a: "accept" },
                                { t: "Ⓧ/□ BUSCAR EN TODOS", a: "search" }, { t: "Ⓑ/○ OPCIONES", a: "back" } ]
                            : [ { t: "▲▼ ELEGIR", a: "" }, { t: "◄► SALTAR 10", a: "" }, { t: "LB/RB LETRA", a: "" },
                                { t: "Ⓐ/✕ JUGAR", a: "accept" }, { t: "Ⓑ/○ SISTEMAS", a: "back" },
@@ -1335,6 +1448,8 @@ Window {
                 { label: "CONTINUAR DONDE LO DEJÉ: " + yn(App.autoResume), act: function () { App.autoResume = !App.autoResume } },
                 { label: "REBOBINAR (RETROCESO): " + yn(App.rewind), act: function () { App.rewind = !App.rewind } } ] },
             "lista": { title: "LISTA DE JUEGOS", items: [
+                { label: "◄ VISTA: " + win.listViewNames[App.listView] + " ►", act: function () { App.listView = App.listView + 1; win.select(win.current) },
+                  side: function (d) { App.listView = App.listView + d; win.select(win.current) } },
                 { label: "OCULTAR JUEGOS CON ✘: " + yn(App.hideBroken), act: function () { win.refilter(function () { App.hideBroken = !App.hideBroken }) } },
                 { label: "OCULTAR VERSIONES REPETIDAS: " + yn(App.hideClones), act: function () { win.refilter(function () { App.hideClones = !App.hideClones }) } },
                 { label: "RECARGAR JUEGOS, TEMAS Y FONDOS", act: function () { Games.rescan(); Theme.reload(); win.current = 0; win.optionsOpen = false } } ] },

@@ -24,6 +24,8 @@ CONTROLES EN EL MENÚ
   Cambiar de lista     LT / RT         L2 / R2             Tab / Mayús+Tab
   Pantalla completa                                        F11
   (listas: todos, favoritos, recientes y cada sistema; también se maneja con el mouse)
+  En OPCIONES > LISTA DE JUEGOS > VISTA eliges entre la lista con preview y una tabla con
+  miniatura, sistema, año, fabricante, tiempo jugado y última partida.
 
 CONTROLES EN EL JUEGO
                        Mando Xbox      Mando PlayStation   Teclado J1     Teclado J2
@@ -50,7 +52,11 @@ CONTROLES EN EL JUEGO
 
 OTROS SISTEMAS
   Los .zip sueltos en roms\ son arcade. Los demás sistemas van en su carpeta dentro de roms\:
-  nes, snes, megadrive, mastersystem, gb, gba, pcengine, psx, mame, dreamcast, naomi y n64.
+  nes, snes, megadrive, mastersystem, gb, gba, pcengine, psx, mame, dreamcast, naomi, n64,
+  gamegear, sg1000, segacd, sega32x, saturn, fds, virtualboy, pokemini, gameandwatch, supergrafx,
+  pcfx, ngp, neogeocd, wonderswan, lynx, atari2600, atari5200, atari7800, jaguar, 3do, coleco,
+  intellivision, vectrex, odyssey2, channelf, supervision y cdi.
+  La pantalla de sistemas dice en qué carpeta va cada uno.
   Se definen en cores\sistemas.ini. Algunos necesitan BIOS en la carpeta system  (PlayStation; Dreamcast y Naomi en system\dc\; PC Engine CD: syscard3.pce).
 
 PREVIEWS (opcional)

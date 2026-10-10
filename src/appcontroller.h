@@ -43,6 +43,7 @@ class AppController : public QObject
     Q_PROPERTY(int diskCount READ diskCount NOTIFY gameRunningChanged) // discos del juego en curso
     Q_PROPERTY(bool hideBroken READ hideBroken WRITE setHideBroken NOTIFY settingsChanged)
     Q_PROPERTY(bool hideClones READ hideClones WRITE setHideClones NOTIFY settingsChanged)
+    Q_PROPERTY(int listView READ listView WRITE setListView NOTIFY settingsChanged) // 0 = lista y preview, 1 = tabla
     Q_PROPERTY(bool fastForward READ fastForward WRITE setFastForward NOTIFY fastForwardChanged)
     Q_PROPERTY(int stateRev READ stateRev NOTIFY statesChanged)     // cambia al guardar una partida
     Q_PROPERTY(int optionsRev READ optionsRev NOTIFY coreOptionsChanged)
@@ -85,6 +86,7 @@ public:
     Q_INVOKABLE void nextDisk();
     bool hideBroken() const; void setHideBroken(bool v);
     bool hideClones() const; void setHideClones(bool v);
+    int listView() const;    void setListView(int v);
     bool fastForward() const; void setFastForward(bool v);
     int stateRev() const { return m_stateRev; }
     int optionsRev() const { return m_optionsRev; }

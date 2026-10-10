@@ -266,6 +266,27 @@ El usuario habla español; responde en español, conciso y directo.
     F1 o el pie). Escribir en la pantalla de sistemas busca en todos. `ui/lastSystem` recuerda la lista.
     En las pruebas `--test-actions` hay que dar `accept` para entrar a la lista antes de navegar juegos
     (`launch:` funciona igual desde cualquier pantalla).
+  - *Vista de tabla, estilo Cemu (2026-10-09):* Opciones → LISTA DE JUEGOS → "VISTA" (`ui/listView`:
+    0 lista y preview, 1 tabla; `win.tableView`). La tabla ocupa todo el ancho (sin preview ni video):
+    miniatura, juego, sistema, año, fabricante, has jugado, última vez (rol nuevo `lastPlayed`) y ★/✔.
+    Las columnas (`listPanel.cThumb`… con `cs`) se encogen en ventanas estrechas. No ordena por columna.
+    Probada offscreen con 15 juegos; no con la lista completa de 4.918.
+  - *Sistemas en cuadrícula (2026-10-09):* `home` ya no es una fila sino un `GridView` (`cardGrid`) de
+    5 columnas que se recorre en las cuatro direcciones (LB/RB salta una página; ◄► dan la vuelta, ▲▼ no).
+    La tarjeta elegida "salta": escala 1.16 con rebote, borde blanco y resplandor que late; las demás
+    van atenuadas. `systemCards()` pone los sistemas con juegos antes que los vacíos. Probada offscreen
+    con 15 tarjetas (ventana cuadrada, cabían todas): **el desplazamiento con más hileras de las que
+    caben y la animación no se han visto**.
+  - *27 sistemas más (2026-10-09):* Game Gear, SG-1000, Sega CD (`genesis_plus_gx`), 32X (`picodrive`),
+    Saturn (`mednafen_saturn`), FDS (`fceumm`), Virtual Boy, Pokémon Mini, Game & Watch, SuperGrafx,
+    PC-FX, Neo Geo Pocket, Neo Geo CD, WonderSwan, Lynx, Atari 2600/5200/7800/Jaguar, 3DO, ColecoVision,
+    Intellivision, Vectrex, Odyssey 2, Channel F, Supervision y CD-i. 23 núcleos nuevos (65,7 MB, nightly
+    del buildbot); **los 34 cargan con `--core-info`, ninguno probado con juegos**. Están en el texto por
+    defecto de `sistemas.ini`, en `build_windows.bat` y en el workflow; al `sistemas.ini` del usuario se
+    le añadieron los bloques (uno ya existente no se regenera solo). Total: 39 sistemas definidos.
+    **Siguen faltando:** DS y 3DS (hace falta puntero táctil en el host), PSP/GameCube/Wii/PS2/Model 3
+    (núcleos con OpenGL: `ppsspp`, `dolphin`, `pcsx2`, `supermodel`) y, como programa externo, Xbox,
+    360, Vita, PS3 y Wii U.
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

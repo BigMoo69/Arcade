@@ -28,7 +28,8 @@ public:
         FavoriteRole,
         PlaysRole,    // veces jugado
         PlayTimeRole, // segundos jugados en total
-        PlayersRole   // 3, 4… si es una versión para varios jugadores; 0 si el título no lo dice
+        PlayersRole,  // 3, 4… si es una versión para varios jugadores; 0 si el título no lo dice
+        LastPlayedRole // fecha de la última partida ("" = nunca)
     };
 
     explicit GameListModel(QObject *parent = nullptr);

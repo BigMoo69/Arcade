@@ -305,6 +305,12 @@ void AppController::setHideBroken(bool v)
     m_games->setHideBroken(v);
     emit settingsChanged();
 }
+int AppController::listView() const { return qBound(0, m_settings.value(QStringLiteral("ui/listView"), 0).toInt(), 1); }
+void AppController::setListView(int v)
+{
+    m_settings.setValue(QStringLiteral("ui/listView"), ((v % 2) + 2) % 2);
+    emit settingsChanged();
+}
 bool AppController::hideClones() const { return m_settings.value(QStringLiteral("ui/hideClones"), false).toBool(); }
 void AppController::setHideClones(bool v)
 {

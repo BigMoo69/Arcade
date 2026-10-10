@@ -468,18 +468,47 @@ void AppController::launch(int row)
     emit gameRunningChanged();
 }
 
+// Emuladores que guardan rutas completas en su configuración (xemu.toml: BIOS, disco duro...).
+// <archivo>.origen recuerda para qué carpeta se escribieron; si el emulador ya no está ahí (se copió
+// el Arcade a otra carpeta o a otro PC) se cambian esas rutas por la carpeta actual.
+static void relocateConfig(const QString &dir, const QString &name)
+{
+    const QString file = dir + u'/' + name, now = QDir::toNativeSeparators(dir);
+    if (!QFileInfo::exists(file)) return;
+    QFile mark(file + QStringLiteral(".origen"));
+    QString old;
+    if (mark.open(QIODevice::ReadOnly)) { old = QString::fromUtf8(mark.readAll()).trimmed(); mark.close(); }
+    if (old.compare(now, Qt::CaseInsensitive) == 0) return;
+    QFile f(file);
+    if (!old.isEmpty() && f.open(QIODevice::ReadOnly)) {
+        const QString before = QString::fromUtf8(f.readAll());
+        f.close();
+        // La misma ruta puede estar escrita con \, con \\ (JSON) o con /
+        auto forms = [](const QString &p) {
+            return QStringList{ p, QString(p).replace(u'\\', QLatin1String("\\\\")), QString(p).replace(u'\\', u'/') };
+        };
+        const QStringList from = forms(old), to = forms(now);
+        QString text = before;
+        for (int i = 0; i < from.size(); ++i) text.replace(from.at(i), to.at(i), Qt::CaseInsensitive);
+        if (text != before && f.open(QIODevice::WriteOnly | QIODevice::Truncate)) { f.write(text.toUtf8()); f.close(); }
+    }
+    if (mark.open(QIODevice::WriteOnly | QIODevice::Truncate)) mark.write(now.toUtf8());
+}
+
 // Sistemas con "programa" en sistemas.ini: el juego lo corre un emulador aparte. El Arcade espera
 // a que se cierre (o lo cierra con Select+Start mantenido) y vuelve al menú.
 void AppController::launchExternal(const QVariantMap &g)
 {
     QString program, args;
-    if (!m_games->externalCommand(g.value(QStringLiteral("core")).toString(), &program, &args)) return;
+    QStringList relocate;
+    if (!m_games->externalCommand(g.value(QStringLiteral("core")).toString(), &program, &args, &relocate)) return;
     if (QDir::isRelativePath(program)) program = m_base + u'/' + program;
     if (!QFileInfo(program).isFile()) {
         emit error(QStringLiteral("No encuentro el emulador de este sistema:\n%1\n\nRevisa la línea \"programa\" "
                                   "de su bloque en cores\\sistemas.ini.").arg(QDir::toNativeSeparators(program)));
         return;
     }
+    for (const QString &r : relocate) relocateConfig(QFileInfo(program).absolutePath(), r);
     const QString rom = QDir::toNativeSeparators(g.value(QStringLiteral("path")).toString());
     QStringList list = QProcess::splitCommand(args);
     bool used = false;

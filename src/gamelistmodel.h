@@ -68,7 +68,7 @@ public:
     // count, images (hasta 4 capturas de sus juegos), logo (media/sistemas/<nombre>.png si existe), folder }.
     Q_INVOKABLE QVariantList systemCards() const;
     // Para un juego cuyo rol "core" empieza por '@': programa y argumentos de su sistema
-    bool externalCommand(const QString &core, QString *program, QString *args) const;
+    bool externalCommand(const QString &core, QString *program, QString *args, QStringList *relocate) const;
 
     Q_INVOKABLE QVariantMap get(int row) const;
     // Fila visible ↔ posición en la lista completa (para conservar la selección al cambiar el filtro)
@@ -92,7 +92,8 @@ private:
     // Sistema extra definido en cores/sistemas.ini: sus ROMs van en roms/<folder>/ y los corre otro núcleo
     // program/args: emulador aparte (programa externo) en vez de núcleo; entonces core = "@" + id
     // romDir: carpeta de juegos fuera del Arcade (clave "juegos"); vacía = roms/<carpeta>
-    struct SystemDef { QString id, name, core, folder, program, args, romDir; QStringList exts; };
+    // relocate: archivos de configuración del emulador aparte que guardan rutas completas (clave "reubicar")
+    struct SystemDef { QString id, name, core, folder, program, args, romDir; QStringList exts, relocate; };
     void loadSystemDefs();
     void writeDefaultSystems(const QString &file) const;
     QVector<SystemDef> m_defs;

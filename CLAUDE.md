@@ -336,6 +336,20 @@ El usuario habla español; responde en español, conciso y directo.
     (10 de Xbox, 6 de 360, ~90 GB): bloques `[xbox]` y `[xbox360]` activos en su `sistemas.ini`; la
     lista muestra los 16. **No se ha lanzado ninguno** (abriría el emulador en su pantalla): los
     argumentos (`-full-screen -dvd_path`, `--fullscreen=true`) están sin comprobar.
+  - *Emuladores aparte dentro del proyecto (2026-10-10):* objetivo del usuario = **un solo paquete con
+    todos los emuladores**, para que nadie tenga que buscarlos. `programa` y `juegos` admiten rutas
+    relativas a la carpeta del Arcade; los emuladores aparte viven en `dist/emuladores/<nombre>/`.
+    Clave `reubicar = <archivo>`: configuraciones con rutas completas (p. ej. `xemu.toml`);
+    `relocateConfig()` guarda en `<archivo>.origen` la carpeta para la que se escribieron y, si cambió,
+    reemplaza la ruta vieja por la actual (formas `\`, `\\` y `/`) antes de lanzar. Probado con un
+    emulador falso. Instalados por copia desde `Desktop\Emuladores` (originales intactos):
+    `emuladores/xemu` (384 MB: exe, `mcpx_1.0.bin`, `Complex_4627Debug.bin`, `xbox_hdd.qcow2`,
+    `xemu.toml` y `eeprom.bin` traídos de AppData → modo portátil) y `emuladores/xenia` (exe +
+    `portable.txt` + config y `content` de `Documents\Xenia`). `[xbox]` y `[xbox360]` están en el
+    `sistemas.ini` por defecto con esas rutas relativas. **Sin lanzar todavía.** Ojo para distribuir:
+    los emuladores son software libre (se pueden incluir con su licencia), pero BIOS, disco duro de
+    Xbox y juegos tienen copyright: no deben ir en un paquete público. Falta que `build_windows.bat`
+    baje los emuladores aparte (xemu, Xenia, y candidatos: Cemu, RPCS3, Vita3K).
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

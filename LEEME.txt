@@ -73,6 +73,9 @@ EMULADORES APARTE (Wii U, PS3, Xbox...)
       extensiones = wua,wud,wux,rpx
   Los juegos van en roms\<carpeta>, o donde ya los tengas si añades la línea
       juegos = D:\Mis juegos\Wii U
+  'programa' y 'juegos' pueden ser rutas relativas a la carpeta del Arcade: los emuladores aparte
+  van en  emuladores\<nombre>\  (por ejemplo emuladores\xemu\xemu.exe) para que todo viaje junto.
+  Xbox (xemu) necesita sus BIOS y su disco duro virtual en esa carpeta; no se incluyen.
   Al cerrar el emulador vuelves al menú; también se cierra
   manteniendo View+Menu (Select+Start) dos segundos. Dentro de ese emulador mandan sus propios
   controles y menús: la pausa, los guardados y los efectos del Arcade no se aplican.

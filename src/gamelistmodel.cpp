@@ -130,7 +130,12 @@ void GameListModel::loadSystemDefs()
         else if (key == u"nucleo") cur.core = val;
         else if (key == u"programa") cur.program = val;
         else if (key == u"argumentos") cur.args = val;
-        else if (key == u"juegos") cur.romDir = QDir::fromNativeSeparators(val);
+        else if (key == u"juegos") { // ruta completa, o relativa a la carpeta del Arcade
+            cur.romDir = QDir::fromNativeSeparators(val);
+            if (QDir::isRelativePath(cur.romDir)) cur.romDir = m_base + u'/' + cur.romDir;
+        }
+        else if (key == u"reubicar")
+            for (const QString &e : val.split(u',', Qt::SkipEmptyParts)) cur.relocate << e.trimmed();
         else if (key == u"carpeta") cur.folder = val;
         else if (key == u"extensiones")
             for (const QString &e : val.toLower().split(u',', Qt::SkipEmptyParts)) cur.exts << e.trimmed();
@@ -165,6 +170,9 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            ";   carpeta = wiiu\n"
            ";   extensiones = wua,wud,wux,rpx\n"
            "; Si los juegos estan en otra carpeta del PC, anade:  juegos = D:\\Mis juegos\\Wii U\n"
+           "; Las rutas de 'programa' y 'juegos' pueden ser relativas a la carpeta del Arcade (emuladores\\...).\n"
+           "; 'reubicar' = archivos de configuracion del emulador que guardan rutas completas: el Arcade las\n"
+           "; corrige solo si la carpeta cambia de sitio (por ejemplo al copiar todo a otro PC).\n"
            "\n"
            "[nes]\nnombre = NINTENDO NES\nnucleo = fceumm_libretro.dll\ncarpeta = nes\nextensiones = nes,zip\n\n"
            "[snes]\nnombre = SUPER NINTENDO\nnucleo = snes9x_libretro.dll\ncarpeta = snes\nextensiones = sfc,smc,zip\n\n"
@@ -211,6 +219,10 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "[wii]\nnombre = NINTENDO WII\nnucleo = dolphin_libretro.dll\ncarpeta = wii\nextensiones = iso,wbfs,rvz,gcz,wad\n\n"
            "[ps2]\nnombre = PLAYSTATION 2\nnucleo = pcsx2_libretro.dll\ncarpeta = ps2\nextensiones = iso,chd,cso,gz\n\n"
            "[3ds]\nnombre = NINTENDO 3DS\nnucleo = azahar_libretro.dll\ncarpeta = 3ds\nextensiones = 3ds,cci,cxi,3dsx,app\n\n"
+           "[xbox]\nnombre = XBOX\nprograma = emuladores\\xemu\\xemu.exe\nargumentos = -full-screen -dvd_path \"{rom}\"\n"
+           "reubicar = xemu.toml\ncarpeta = xbox\nextensiones = iso,xiso\n\n"
+           "[xbox360]\nnombre = XBOX 360\nprograma = emuladores\\xenia\\xenia.exe\nargumentos = \"{rom}\" --fullscreen=true\n"
+           "carpeta = xbox360\nextensiones = iso,xex,zar\n\n"
            "[model3]\nnombre = SEGA MODEL 3\nnucleo = supermodel_libretro.dll\ncarpeta = model3\nextensiones = zip\n";
 }
 
@@ -391,12 +403,13 @@ void GameListModel::cycleSystem(int direction)
     setSystem(next == 0 ? QString() : m_systems.at(next - 1));
 }
 
-bool GameListModel::externalCommand(const QString &core, QString *program, QString *args) const
+bool GameListModel::externalCommand(const QString &core, QString *program, QString *args, QStringList *relocate) const
 {
     for (const SystemDef &d : m_defs) {
         if (d.core != core || d.program.isEmpty()) continue;
         *program = d.program;
         *args = d.args;
+        *relocate = d.relocate;
         return true;
     }
     return false;

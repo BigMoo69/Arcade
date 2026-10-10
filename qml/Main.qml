@@ -1063,7 +1063,8 @@ Window {
                     text: win.homeSearching ? "Ⓐ / ENTER JUGAR   ·   Ⓑ / ESC VOLVER A LOS SISTEMAS"
                           : !home.card ? "" : home.card.count > 0 ? "Ⓐ / ENTER PARA ENTRAR"
                           : home.card.folder !== "" ? "COPIA SUS JUEGOS EN  roms\\" + home.card.folder
-                          : home.card.id.indexOf("FAVORITOS") >= 0 ? "MARCA JUEGOS CON Ⓨ/△ O F2 PARA VERLOS AQUÍ" : "AQUÍ SALDRÁN LOS ÚLTIMOS JUEGOS QUE ABRAS"
+                          : home.card.id.indexOf("FAVORITOS") >= 0 ? "MARCA JUEGOS CON Ⓨ/△ O F2 PARA VERLOS AQUÍ"
+                          : home.card.id === "RECIENTES" ? "AQUÍ SALDRÁN LOS ÚLTIMOS JUEGOS QUE ABRAS" : "SUS JUEGOS VAN EN OTRA CARPETA  ·  VER LEEME.TXT"
                     color: win.cDim; font.family: arcadeFont; font.pixelSize: 17 * u
                 }
             }

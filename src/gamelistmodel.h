@@ -87,7 +87,8 @@ signals:
 private:
     struct Meta { QString title, year, maker, system, parent; int players = 0; }; // players: solo si el título dice "N Players"
     // key = texto en minúsculas para buscar; parent = juego original si este es un clon
-    struct Game { QString rom, title, year, maker, path, system, key, core, parent; int players = 0; bool duplicate = false; };
+    // icon: imagen que trae el propio juego (ICON0.PNG de PS3 / PS Vita); se usa si no hay captura
+    struct Game { QString rom, title, year, maker, path, system, key, core, parent, icon; int players = 0; bool duplicate = false; };
     void markDuplicates();
     // Sistema extra definido en cores/sistemas.ini: sus ROMs van en roms/<folder>/ y los corre otro núcleo
     // program/args: emulador aparte (programa externo) en vez de núcleo; entonces core = "@" + id

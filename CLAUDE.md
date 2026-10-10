@@ -346,7 +346,7 @@ El usuario habla español; responde en español, conciso y directo.
     `emuladores/xemu` (384 MB: exe, `mcpx_1.0.bin`, `Complex_4627Debug.bin`, `xbox_hdd.qcow2`,
     `xemu.toml` y `eeprom.bin` traídos de AppData → modo portátil) y `emuladores/xenia` (exe +
     `portable.txt` + config y `content` de `Documents\Xenia`). `[xbox]` y `[xbox360]` están en el
-    `sistemas.ini` por defecto con esas rutas relativas. **Sin lanzar todavía.** Ojo para distribuir:
+    `sistemas.ini` por defecto con esas rutas relativas. **El usuario lo probó el 2026-10-10 y "jaló bien"** (lanzar desde el Arcade; no detalló si probó los dos sistemas ni el cierre con el mando). Ojo para distribuir:
     los emuladores son software libre (se pueden incluir con su licencia), pero BIOS, disco duro de
     Xbox y juegos tienen copyright: no deben ir en un paquete público. Falta que `build_windows.bat`
     baje los emuladores aparte (xemu, Xenia, y candidatos: Cemu, RPCS3, Vita3K).
@@ -360,6 +360,18 @@ El usuario habla español; responde en español, conciso y directo.
     falso (lista y argumentos con espacios). **Ningún emulador real lanzado.** PS Vita sin sistema:
     los juegos se instalan dentro de Vita3K (se lanzan por ID con `-r`), no son archivos; haría falta
     listar `ux0/app` de su carpeta de datos. RPCS3 necesita el firmware de PS3 y Cemu `keys.txt`.
+  - *PS Vita y carátulas (2026-10-10):* sistema `[psvita]` por defecto: `juegos =
+    emuladores\vita3k\datos\ux0\app`, `dentro = eboot.bin`, `argumentos = --frontend sdl -F -r {nombre}`
+    (`{nombre}` = ID del juego = nombre de su carpeta, con mayúsculas), `reubicar = config.yml`. En la
+    copia del usuario `config.yml` lleva `pref-path` → `emuladores/vita3k/datos/` (los juegos se instalan
+    desde el propio Vita3K). Para juegos-carpeta `GameListModel` lee el título de `PARAM.SFO`
+    (`sfoTitle()`: `sce_sys/param.sfo`, `PS3_GAME/PARAM.SFO`) y usa `icon0.png`/`ICON0.PNG` como imagen
+    si no hay captura (`Game::icon`). Probado con un juego falso (SFO sintético): título, icono y
+    argumento. **Vita3K real sin probar** (ni `--frontend sdl`). Si `argumentos` usa `{nombre}` ya no se
+    añade el archivo al final. Carátulas: 10 de Xbox bajadas de `libretro-thumbnails/Microsoft_-_Xbox`
+    (`Named_Boxarts`, 2,5 MB) a `dist/media/snaps/xbox/<nombre en minúsculas>.png`; el repositorio de
+    Xbox 360 solo tiene 12 carátulas y ninguna de los 6 juegos del usuario; PS3: no tiene juegos aún.
+    Scripts: `covers_find.py` / `covers_get.py` en el scratchpad.
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

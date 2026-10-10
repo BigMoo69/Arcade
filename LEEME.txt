@@ -81,6 +81,9 @@ EMULADORES APARTE (Wii U, PS3, Xbox...)
   PS3: valen .iso y juegos en carpeta (roms\ps3\<juego>\PS3_GAME\USRDIR\EBOOT.BIN); RPCS3 pide
   instalar antes el firmware oficial de PS3 desde su propio menú (File > Install Firmware).
   Wii U: Cemu pide el archivo keys.txt para juegos cifrados (.wud/.wux).
+  PS Vita (Vita3K): los juegos no se copian a roms\. Abre emuladores\vita3k\Vita3K.exe, instala el
+  firmware y tus juegos desde su menú, y después aparecen solos en el Arcade con su título e icono.
+  Los juegos de PS3 en carpeta y los de PS Vita usan como imagen el icono que trae el propio juego.
   Al cerrar el emulador vuelves al menú; también se cierra
   manteniendo View+Menu (Select+Start) dos segundos. Dentro de ese emulador mandan sus propios
   controles y menús: la pausa, los guardados y los efectos del Arcade no se aplican.

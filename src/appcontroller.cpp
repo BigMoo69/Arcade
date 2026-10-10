@@ -519,11 +519,11 @@ void AppController::launchExternal(const QVariantMap &g)
         if (part.compare(id, Qt::CaseInsensitive) == 0) name = part;
     bool used = false;
     for (QString &a : list) {
-        used |= a.contains(QLatin1String("{rom}"));
+        used |= a.contains(QLatin1String("{rom}")) || a.contains(QLatin1String("{nombre}"));
         a.replace(QLatin1String("{rom}"), rom);
         a.replace(QLatin1String("{nombre}"), name);
     }
-    if (!used) list << rom; // sin {rom}: el juego va al final
+    if (!used) list << rom; // sin {rom} ni {nombre}: el juego va al final
 
     m_title = g.value(QStringLiteral("title")).toString();
     m_rom = g.value(QStringLiteral("rom")).toString();

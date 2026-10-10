@@ -2,6 +2,7 @@
 #include "libretrocore.h"
 
 #include <QQuickWindow>
+#include <QMouseEvent>
 #include <QSGSimpleTextureNode>
 #include <QSGTransformNode>
 #include <QSGTexture>
@@ -84,6 +85,7 @@ LibretroCore *EmulatorView::s_core = nullptr;
 EmulatorView::EmulatorView(QQuickItem *parent) : QQuickItem(parent)
 {
     setFlag(ItemHasContents, true);
+    setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
     if (s_core)
         connect(s_core, &LibretroCore::frameReady, this, [this] { updateContentRect(); update(); });
 }
@@ -119,6 +121,39 @@ void EmulatorView::setCrt(int m)
     m_crt = m;
     emit crtChanged();
     update();
+}
+
+// Pasa la posición a coordenadas de la imagen del juego (0..1), deshaciendo el giro de los verticales
+void EmulatorView::pointerMoved(qreal x, qreal y)
+{
+    if (!s_core || m_content.isEmpty()) return;
+    const double u = (x - m_content.x()) / m_content.width(), v = (y - m_content.y()) / m_content.height();
+    double fx = u, fy = v;
+    switch (s_core->rotation()) {
+    case 1: fx = 1 - v; fy = u; break;
+    case 2: fx = 1 - u; fy = 1 - v; break;
+    case 3: fx = v; fy = 1 - u; break;
+    }
+    s_core->setPointer(fx, fy, u >= 0 && u <= 1 && v >= 0 && v <= 1);
+}
+
+static int pointerButtons(Qt::MouseButtons b)
+{
+    return (b & Qt::LeftButton ? 1 : 0) | (b & Qt::RightButton ? 2 : 0) | (b & Qt::MiddleButton ? 4 : 0);
+}
+
+void EmulatorView::mousePressEvent(QMouseEvent *e)
+{
+    pointerMoved(e->position().x(), e->position().y());
+    if (s_core) s_core->setPointerButtons(pointerButtons(e->buttons()));
+}
+
+void EmulatorView::mouseMoveEvent(QMouseEvent *e) { pointerMoved(e->position().x(), e->position().y()); }
+
+void EmulatorView::mouseReleaseEvent(QMouseEvent *e)
+{
+    pointerMoved(e->position().x(), e->position().y());
+    if (s_core) s_core->setPointerButtons(pointerButtons(e->buttons()));
 }
 
 void EmulatorView::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry)

@@ -33,6 +33,7 @@ class AppController : public QObject
     Q_PROPERTY(int attractSeconds READ attractSeconds CONSTANT)
     Q_PROPERTY(bool rewind READ rewind WRITE setRewind NOTIFY settingsChanged)   // permite rebobinar
     Q_PROPERTY(bool rewinding READ rewinding NOTIFY rewindingChanged)
+    Q_PROPERTY(bool pointerUsed READ pointerUsed NOTIFY pointerUsedChanged) // el juego usa táctil o pistola
     // Sonidos del menú (sounds/mover.wav, aceptar.wav, volver.wav) y música de fondo (sounds/musica.*)
     Q_PROPERTY(bool menuSounds READ menuSounds WRITE setMenuSounds NOTIFY settingsChanged)
     Q_PROPERTY(bool menuMusic READ menuMusic WRITE setMenuMusic NOTIFY settingsChanged)
@@ -76,6 +77,7 @@ public:
     int attractSeconds() const; // ui/attractSeconds en arcade.ini (60 por defecto)
     bool rewind() const;     void setRewind(bool v);
     bool rewinding() const;
+    bool pointerUsed() const;
     bool menuSounds() const; void setMenuSounds(bool v);
     bool menuMusic() const;  void setMenuMusic(bool v);
     QString musicUrl() const;
@@ -116,6 +118,7 @@ signals:
     void confirmingExitChanged();
     void fastForwardChanged();
     void rewindingChanged();
+    void pointerUsedChanged();
     void statesChanged();
     void coreOptionsChanged();
     void settingsChanged();

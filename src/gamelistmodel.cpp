@@ -188,7 +188,8 @@ void GameListModel::writeDefaultSystems(const QString &file) const
            "[odyssey2]\nnombre = ODYSSEY 2\nnucleo = o2em_libretro.dll\ncarpeta = odyssey2\nextensiones = bin,zip\n\n"
            "[channelf]\nnombre = FAIRCHILD CHANNEL F\nnucleo = freechaf_libretro.dll\ncarpeta = channelf\nextensiones = chf,bin,zip\n\n"
            "[supervision]\nnombre = WATARA SUPERVISION\nnucleo = potator_libretro.dll\ncarpeta = supervision\nextensiones = sv,zip\n\n"
-           "[cdi]\nnombre = PHILIPS CD-I\nnucleo = same_cdi_libretro.dll\ncarpeta = cdi\nextensiones = chd,cue,iso\n";
+           "[cdi]\nnombre = PHILIPS CD-I\nnucleo = same_cdi_libretro.dll\ncarpeta = cdi\nextensiones = chd,cue,iso\n\n"
+           "[nds]\nnombre = NINTENDO DS\nnucleo = melondsds_libretro.dll\ncarpeta = nds\nextensiones = nds,zip\n";
 }
 
 void GameListModel::loadStatus()

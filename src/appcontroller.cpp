@@ -102,6 +102,7 @@ AppController::AppController(const QString &baseDir, LibretroCore *core, Gamepad
     m_games->setHideBroken(hideBroken());
     m_core->setRewindEnabled(rewind());
     connect(m_core, &LibretroCore::rewindingChanged, this, &AppController::rewindingChanged);
+    connect(m_core, &LibretroCore::pointerUsedChanged, this, &AppController::pointerUsedChanged);
     m_games->setHideClones(hideClones());
     connect(m_core, &LibretroCore::gameStopped, this, [this] {
         if (m_gameScope) { // vuelve a los ajustes y controles generales
@@ -292,6 +293,7 @@ bool AppController::menuSounds() const { return !m_quiet && m_settings.value(QSt
 void AppController::setMenuSounds(bool v) { m_settings.setValue(QStringLiteral("audio/menuSounds"), v); emit settingsChanged(); }
 bool AppController::menuMusic() const { return !m_quiet && m_settings.value(QStringLiteral("audio/menuMusic"), true).toBool(); }
 void AppController::setMenuMusic(bool v) { m_settings.setValue(QStringLiteral("audio/menuMusic"), v); emit settingsChanged(); }
+bool AppController::pointerUsed() const { return m_core->pointerUsed(); }
 int AppController::diskCount() const { return m_core->diskCount(); }
 void AppController::nextDisk()
 {

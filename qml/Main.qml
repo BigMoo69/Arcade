@@ -205,9 +205,14 @@ Window {
     MouseArea {
         anchors.fill: parent; z: 100
         hoverEnabled: true; acceptedButtons: Qt.NoButton // solo observa: los clics pasan a lo de abajo
-        cursorShape: !App.fullscreen || (win.mouseActive && (!App.gameRunning || App.confirmingExit || App.paused))
+        // En juegos con pantalla táctil o pistola el cursor es una mira y no se oculta
+        cursorShape: App.gameRunning && App.pointerUsed && !App.paused && !App.confirmingExit ? Qt.CrossCursor
+                     : !App.fullscreen || (win.mouseActive && (!App.gameRunning || App.confirmingExit || App.paused))
                      ? Qt.ArrowCursor : Qt.BlankCursor
-        onPositionChanged: { win.mouseActive = true; mouseIdle.restart(); win.wake() }
+        onPositionChanged: (m) => {
+            win.mouseActive = true; mouseIdle.restart(); win.wake()
+            if (App.gameRunning) emu.pointerMoved(m.x, m.y)
+        }
     }
 
     // =======================================================================
@@ -836,9 +841,10 @@ Window {
                                 id: art
                                 anchors { top: parent.top; left: parent.left; right: parent.right; bottom: cardName.top
                                           margins: 8 * cu; bottomMargin: 6 * cu }
-                                color: "black"; clip: true; radius: 4 * cu
+                                // Las fotos de consola están hechas para fondo claro (las oscuras no se ven sobre negro)
+                                color: c && c.logo !== "" ? "#f6f6fa" : "black"; clip: true; radius: 4 * cu
                                 Image {
-                                    anchors.fill: parent
+                                    anchors.fill: parent; anchors.margins: 5 * cu
                                     visible: c && c.logo !== ""
                                     source: c ? c.logo : ""
                                     fillMode: Image.PreserveAspectFit; smooth: true; asynchronous: true

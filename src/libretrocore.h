@@ -84,6 +84,11 @@ public:
     double aspectRatio() const;          // relación final (ya considera la rotación)
     int rotation() const { return m_rotation; } // 0..3 (múltiplos de 90° antihorario)
 
+    // Puntero para pantallas táctiles (DS), pistolas y mouse: posición 0..1 sobre la imagen del juego
+    void setPointer(double fx, double fy, bool inside);
+    void setPointerButtons(int buttons); // bit 0 = izquierdo (tocar / disparar), 1 = derecho, 2 = central
+    bool pointerUsed() const { return m_ptrUsed; } // el juego en curso ha pedido el puntero
+
     // Overrides de opciones del núcleo (cores/fbneo.ini)
     void setOptionOverrides(const QHash<QByteArray, QByteArray> &o) { m_overrides = o; }
 
@@ -92,6 +97,7 @@ signals:
     void gameStopped();
     void pausedChanged();
     void rewindingChanged();
+    void pointerUsedChanged();
     void message(const QString &text);
 
 private:
@@ -102,6 +108,7 @@ private:
     static size_t  cbAudioBatch(const int16_t *data, size_t frames);
     static void    cbInputPoll();
     static int16_t cbInputState(unsigned port, unsigned device, unsigned index, unsigned id);
+    int16_t pointerState(unsigned device, unsigned index, unsigned id);
     static void    cbLog(enum retro_log_level level, const char *fmt, ...);
     static bool    cbRumble(unsigned port, enum retro_rumble_effect effect, uint16_t strength);
     static uintptr_t cbGetFramebuffer();
@@ -175,6 +182,9 @@ private:
     retro_pixel_format m_pixFmt = RETRO_PIXEL_FORMAT_0RGB1555;
     retro_system_av_info m_av{};
     unsigned m_rotation = 0;
+    int m_ptrX = 0, m_ptrY = 0, m_ptrButtons = 0; // posición en -0x7fff..0x7fff, como la pide libretro
+    double m_mouseDX = 0, m_mouseDY = 0;          // movimiento relativo pendiente, en píxeles del juego
+    bool m_ptrInside = false, m_ptrUsed = false;
     QImage m_frame;
 
     // Opciones de núcleo: clave -> valor actual

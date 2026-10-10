@@ -1,4 +1,4 @@
-# Arcade Multijuegos — contexto para Claude Code
+﻿# Arcade Multijuegos — contexto para Claude Code
 
 Frontend estilo máquina multijuegos arcade de principios de los 2000 (Pandora Box / NeoGeo):
 un solo `Arcade.exe` que muestra la lista de juegos con previews y corre los ROMs con
@@ -287,6 +287,20 @@ El usuario habla español; responde en español, conciso y directo.
     **Siguen faltando:** DS y 3DS (hace falta puntero táctil en el host), PSP/GameCube/Wii/PS2/Model 3
     (núcleos con OpenGL: `ppsspp`, `dolphin`, `pcsx2`, `supermodel`) y, como programa externo, Xbox,
     360, Vita, PS3 y Wii U.
+  - *Fotos de consolas (2026-10-09):* 37 imágenes de Wikimedia Commons (fotos de Evan Amos, 640 px,
+    13 MB; dominio público/CC0 o CC BY-SA 3.0, ver `CREDITOS.txt`) en `dist/media/sistemas/<slug>.png|jpg`
+    (no van en git). Las tarjetas con foto usan fondo claro. Sin foto: Pokémon Mini y los sistemas
+    arcade (mosaico o iniciales). El desplazamiento de la cuadrícula ya se vio en capturas (45 tarjetas).
+  - *Puntero: táctil, pistola y mouse (2026-10-09):* `EmulatorView` acepta el mouse (`pointerMoved`,
+    eventos de botón) y pasa la posición a 0..1 sobre la imagen (deshace la rotación) →
+    `LibretroCore::setPointer/setPointerButtons`; `pointerState()` responde `RETRO_DEVICE_POINTER`,
+    `LIGHTGUN` (izq. = gatillo, der. = recargar) y `MOUSE` (relativo), solo en el puerto 0. El host
+    declara `GET_INPUT_DEVICE_CAPABILITIES`. Si el juego pide táctil o pistola (`App.pointerUsed`) el
+    cursor es una mira y no se oculta. Pasos de prueba `mdown:x;y` / `mup:x;y`. Probado con el núcleo
+    de prueba (dibuja un cuadro donde se toca) en `--test-hidden`. Sistema `[nds]` (núcleo `melondsds`,
+    `roms/nds/`) definido; el núcleo (5,1 MB) carga con `--core-info` (35 núcleos); **ningún juego probado**; tampoco
+    juegos de pistola de FBNeo/MAME. No hay cursor movido con el stick (melonDS trae el suyo:
+    stick derecho + R2).
   - **Pendiente de la lista de RetroArch:** run-ahead, trucos en consolas, pistola/
     mouse, más shaders, cámara lenta, grabación de partidas.
   - **Al probar en `dist/`:** respaldar y restaurar `arcade.ini`, `roms/estado.txt`, `roms/jugados.txt`

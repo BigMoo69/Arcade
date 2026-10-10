@@ -183,6 +183,14 @@ int main(int argc, char *argv[])
                               : c.isLetter() ? Qt::Key_A + (c.toUpper().unicode() - 'A') : Qt::Key_0 + (c.unicode() - '0');
                 QKeyEvent ev(step.startsWith(u'h') ? QEvent::KeyPress : QEvent::KeyRelease, key, Qt::NoModifier, QString(c));
                 QCoreApplication::sendEvent(win, &ev);
+            } else if (step.startsWith(QLatin1String("mdown:")) || step.startsWith(QLatin1String("mup:"))) {
+                // Botón izquierdo mantenido / soltado en "x;y" (fracción de la ventana): táctil y pistola
+                const QStringList xy = step.section(u':', 1).split(u';');
+                const QPointF pos(xy.value(0).toDouble() * win->width(), xy.value(1).toDouble() * win->height());
+                const bool down = step.startsWith(QLatin1String("mdown"));
+                QMouseEvent ev(down ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease, pos, win->mapToGlobal(pos.toPoint()),
+                               Qt::LeftButton, down ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(win, &ev);
             } else if (step.startsWith(QLatin1String("click:")) || step.startsWith(QLatin1String("dclick:"))) {
                 // "click:x;y" en fracción de la ventana (0..1), para no depender del tamaño
                 const QStringList xy = step.section(u':', 1).split(u';');

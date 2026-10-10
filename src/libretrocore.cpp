@@ -222,6 +222,8 @@ void LibretroCore::unloadGame()
     m_fast = false;
     m_rewind.clear();
     if (m_rewinding) { m_rewinding = false; emit rewindingChanged(); }
+    m_ptrButtons = 0;
+    if (m_ptrUsed) { m_ptrUsed = false; emit pointerUsedChanged(); }
     if (m_paused) { m_paused = false; emit pausedChanged(); }
     m_romData.clear();
     m_frame = QImage();
@@ -674,6 +676,11 @@ bool LibretroCore::environment(unsigned cmd, void *data)
         if (data) m_disk = *static_cast<const retro_disk_control_callback *>(data);
         return true;
 
+    case RETRO_ENVIRONMENT_GET_INPUT_DEVICE_CAPABILITIES:
+        if (data) *static_cast<uint64_t *>(data) = (1 << RETRO_DEVICE_JOYPAD) | (1 << RETRO_DEVICE_ANALOG)
+            | (1 << RETRO_DEVICE_POINTER) | (1 << RETRO_DEVICE_MOUSE) | (1 << RETRO_DEVICE_LIGHTGUN);
+        return true;
+
     case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
         if (data) static_cast<retro_rumble_interface *>(data)->set_rumble_state = &LibretroCore::cbRumble;
         return true;
@@ -810,8 +817,62 @@ int16_t LibretroCore::cbInputState(unsigned port, unsigned device, unsigned inde
         if (index > RETRO_DEVICE_INDEX_ANALOG_RIGHT) return 0; // botones analógicos: no hay
         return s_self->m_pad->analog(int(port), index, id);
     }
-    if ((device & RETRO_DEVICE_MASK) != RETRO_DEVICE_JOYPAD) return 0;
+    const unsigned dev = device & RETRO_DEVICE_MASK;
+    if (dev == RETRO_DEVICE_POINTER || dev == RETRO_DEVICE_MOUSE || dev == RETRO_DEVICE_LIGHTGUN)
+        return port == 0 ? s_self->pointerState(dev, index, id) : 0; // un solo puntero: el mouse
+    if (dev != RETRO_DEVICE_JOYPAD) return 0;
     return s_self->m_pad->retroButton(int(port), id) ? 1 : 0;
+}
+
+void LibretroCore::setPointer(double fx, double fy, bool inside)
+{
+    const int x = qBound(-0x7fff, int((fx * 2.0 - 1.0) * 0x7fff), 0x7fff);
+    const int y = qBound(-0x7fff, int((fy * 2.0 - 1.0) * 0x7fff), 0x7fff);
+    const QSize px = m_frame.isNull() ? QSize(320, 240) : m_frame.size();
+    m_mouseDX += (x - m_ptrX) * double(px.width()) / 0xfffe;
+    m_mouseDY += (y - m_ptrY) * double(px.height()) / 0xfffe;
+    m_ptrX = x; m_ptrY = y; m_ptrInside = inside;
+}
+
+void LibretroCore::setPointerButtons(int buttons) { m_ptrButtons = buttons; }
+
+int16_t LibretroCore::pointerState(unsigned device, unsigned index, unsigned id)
+{
+    const bool left = m_ptrButtons & 1, right = m_ptrButtons & 2, middle = m_ptrButtons & 4;
+    if (device == RETRO_DEVICE_MOUSE) {
+        switch (id) {
+        case RETRO_DEVICE_ID_MOUSE_X: { const int v = int(m_mouseDX); m_mouseDX -= v; return int16_t(v); }
+        case RETRO_DEVICE_ID_MOUSE_Y: { const int v = int(m_mouseDY); m_mouseDY -= v; return int16_t(v); }
+        case RETRO_DEVICE_ID_MOUSE_LEFT:   return left;
+        case RETRO_DEVICE_ID_MOUSE_RIGHT:  return right;
+        case RETRO_DEVICE_ID_MOUSE_MIDDLE: return middle;
+        }
+        return 0;
+    }
+    // Táctil o pistola: hace falta ver el cursor (el mouse relativo no lo necesita)
+    if (!m_ptrUsed) { m_ptrUsed = true; emit pointerUsedChanged(); }
+    if (device == RETRO_DEVICE_POINTER) {
+        if (index != 0) return 0;
+        switch (id) {
+        case RETRO_DEVICE_ID_POINTER_X: return int16_t(m_ptrX);
+        case RETRO_DEVICE_ID_POINTER_Y: return int16_t(m_ptrY);
+        case RETRO_DEVICE_ID_POINTER_PRESSED:
+        case RETRO_DEVICE_ID_POINTER_COUNT: return left && m_ptrInside;
+        case RETRO_DEVICE_ID_POINTER_IS_OFFSCREEN: return !m_ptrInside;
+        }
+        return 0;
+    }
+    switch (id) { // pistola
+    case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X: return int16_t(m_ptrX);
+    case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y: return int16_t(m_ptrY);
+    case RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN: return !m_ptrInside;
+    case RETRO_DEVICE_ID_LIGHTGUN_TRIGGER: return left;
+    case RETRO_DEVICE_ID_LIGHTGUN_RELOAD:  return right; // botón derecho = recargar (disparo fuera de pantalla)
+    case RETRO_DEVICE_ID_LIGHTGUN_AUX_A:   return middle;
+    case RETRO_DEVICE_ID_LIGHTGUN_START:  return m_pad->retroButton(0, RETRO_DEVICE_ID_JOYPAD_START);
+    case RETRO_DEVICE_ID_LIGHTGUN_SELECT: return m_pad->retroButton(0, RETRO_DEVICE_ID_JOYPAD_SELECT);
+    }
+    return 0;
 }
 
 bool LibretroCore::cbRumble(unsigned port, enum retro_rumble_effect effect, uint16_t strength)

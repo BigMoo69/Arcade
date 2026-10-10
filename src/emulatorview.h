@@ -32,6 +32,8 @@ public:
     int crt() const { return m_crt; }
     void setCrt(int m);
     QRectF contentRect() const { return m_content; }
+    // Posición del mouse sobre el item: se envía al juego como puntero (táctil / pistola / mouse)
+    Q_INVOKABLE void pointerMoved(qreal x, qreal y);
 
 signals:
     void scanlinesChanged();
@@ -43,6 +45,9 @@ signals:
 protected:
     QSGNode *updatePaintNode(QSGNode *old, UpdatePaintNodeData *) override;
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
+    void mousePressEvent(QMouseEvent *e) override;
+    void mouseMoveEvent(QMouseEvent *e) override;
+    void mouseReleaseEvent(QMouseEvent *e) override;
 
 private:
     static QImage scanlineMask(int sourceLines);

@@ -52,7 +52,8 @@ RETRO_API void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb
 RETRO_API void retro_set_audio_sample(retro_audio_sample_t) {}
 RETRO_API void retro_set_audio_sample_batch(retro_audio_sample_batch_t) {}
 RETRO_API void retro_set_input_poll(retro_input_poll_t) {}
-RETRO_API void retro_set_input_state(retro_input_state_t) {}
+static retro_input_state_t input_cb;
+RETRO_API void retro_set_input_state(retro_input_state_t cb) { input_cb = cb; }
 RETRO_API void retro_init() {}
 RETRO_API void retro_deinit() {}
 RETRO_API unsigned retro_api_version() { return RETRO_API_VERSION; }
@@ -116,6 +117,14 @@ RETRO_API void retro_run()
     pglScissor(int(frame_count % W), 0, 6, H); // franja blanca en movimiento
     pglClearColor(1, 1, 1, 1);
     pglClear(0x4000);
+    // Puntero (táctil): un cuadro negro donde se está tocando
+    if (input_cb && input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED)) {
+        const int px = (input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X) + 0x7fff) * int(W) / 0xfffe;
+        const int py = (input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y) + 0x7fff) * int(H) / 0xfffe;
+        pglScissor(px - 10, int(H) - py - 10, 20, 20);
+        pglClearColor(0, 0, 0, 1);
+        pglClear(0x4000);
+    }
     pglDisable(0x0C11);
     ++frame_count;
     video_cb(RETRO_HW_FRAME_BUFFER_VALID, W, H, 0);
